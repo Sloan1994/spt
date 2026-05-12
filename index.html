@@ -1387,7 +1387,8 @@
   <div class="modal">
     <h3>Log a food</h3>
     <input type="text" class="food-search-input" id="food-search" placeholder="Search foods or brands (e.g., 'Tesco protein yoghurt')…" oninput="renderFoodPickList()" autocomplete="off" />
-    <div id="food-pick-list-wrap" style="max-height:50vh;overflow-y:auto;-webkit-overflow-scrolling:touch;margin:-4px 0 8px;">
+    <button class="btn btn-primary" onclick="openBarcodeScanner()" style="margin-bottom:12px;">📷 Scan barcode</button>
+    <div id="food-pick-list-wrap" style="max-height:42vh;overflow-y:auto;-webkit-overflow-scrolling:touch;margin:-4px 0 8px;">
       <div id="food-pick-list"></div>
       <div id="food-pick-off"></div>
     </div>
@@ -1408,6 +1409,19 @@
     <p id="servings-preview" class="micro" style="margin-bottom:12px;"></p>
     <button class="btn btn-primary" onclick="confirmLogFood()">Log it</button>
     <button class="btn btn-ghost" onclick="closeServings()" style="margin-top:8px;">Cancel</button>
+  </div>
+</div>
+
+<!-- Barcode Scanner Modal -->
+<div class="modal-backdrop" id="barcodeScannerModal">
+  <div class="modal" style="padding:0;max-width:92vw;width:92vw;overflow:hidden;background:#000;">
+    <div style="padding:14px 16px;color:#fff;text-align:center;font-weight:600;background:rgba(0,0,0,0.85);">
+      Point at a barcode
+    </div>
+    <div id="barcode-reader" style="width:100%;min-height:60vh;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;"></div>
+    <div style="padding:14px;background:rgba(0,0,0,0.85);display:flex;justify-content:center;">
+      <button onclick="closeBarcodeScanner()" style="padding:10px 24px;border-radius:10px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);font-family:inherit;font-size:14px;font-weight:600;">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -3679,6 +3693,136 @@ function pickOffFood(offId) {
     saveState();
   }
   pickFood(food.id);
+}
+
+// ---------------------------------------------------------------------
+// Barcode scanner (lazy-loaded html5-qrcode + Open Food Facts product lookup)
+// ---------------------------------------------------------------------
+let _scanner = null;
+let _scanInFlight = false;
+
+function loadBarcodeLibrary() {
+  return new Promise((resolve, reject) => {
+    if (typeof window.Html5Qrcode !== 'undefined') return resolve();
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js';
+    s.async = true;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Failed to load scanner library'));
+    document.head.appendChild(s);
+  });
+}
+
+async function openBarcodeScanner() {
+  const modal = document.getElementById('barcodeScannerModal');
+  modal.classList.add('show');
+  const reader = document.getElementById('barcode-reader');
+  reader.innerHTML = '<div style="padding:40px;color:#fff;opacity:0.7;">Loading scanner…</div>';
+  try {
+    await loadBarcodeLibrary();
+  } catch (e) {
+    reader.innerHTML = '<div style="padding:40px;color:#fff;">Couldn\'t load scanner (check your connection).</div>';
+    return;
+  }
+  reader.innerHTML = '';
+  try {
+    _scanner = new Html5Qrcode('barcode-reader');
+    const formats = window.Html5QrcodeSupportedFormats ? [
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.CODE_128
+    ] : undefined;
+    const config = { fps: 10, qrbox: { width: 280, height: 160 }, aspectRatio: 1, formatsToSupport: formats };
+    await _scanner.start({ facingMode: 'environment' }, config, onBarcodeScanned, () => {});
+  } catch (err) {
+    reader.innerHTML = `<div style="padding:40px;color:#fff;">Camera unavailable.<br><span style="font-size:12px;opacity:0.7;">${escapeHtml(String(err && err.message || err))}</span></div>`;
+  }
+}
+
+async function closeBarcodeScanner() {
+  if (_scanner) {
+    try { await _scanner.stop(); } catch (e) {}
+    try { _scanner.clear(); } catch (e) {}
+    _scanner = null;
+  }
+  document.getElementById('barcodeScannerModal').classList.remove('show');
+  _scanInFlight = false;
+}
+
+async function onBarcodeScanned(decodedText) {
+  if (_scanInFlight) return;
+  _scanInFlight = true;
+  const barcode = (decodedText || '').trim();
+  // Stop scanning + close modal immediately
+  if (_scanner) {
+    try { await _scanner.stop(); } catch (e) {}
+    try { _scanner.clear(); } catch (e) {}
+    _scanner = null;
+  }
+  document.getElementById('barcodeScannerModal').classList.remove('show');
+  // Check local DB first (works offline for previously-scanned items)
+  const localId = 'off-' + barcode;
+  const local = (state.foodDatabase || []).find(f => f.id === localId);
+  if (local) {
+    _scanInFlight = false;
+    pickFood(local.id);
+    return;
+  }
+  // Look up on Open Food Facts
+  const lookupEl = document.getElementById('food-pick-off');
+  if (lookupEl) lookupEl.innerHTML = `<div class="micro" style="padding:12px;text-align:center;color:var(--ink-faint);">Looking up barcode ${escapeHtml(barcode)}…</div>`;
+  try {
+    const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=code,product_name,brands,nutriments,serving_size`);
+    const data = await r.json();
+    if (!data || data.status !== 1 || !data.product) {
+      _scanInFlight = false;
+      if (lookupEl) lookupEl.innerHTML = '';
+      alert(`Barcode ${barcode} not found in Open Food Facts.\n\nTap "+ Add your own food" to enter it manually — the barcode will be pre-filled in the name.`);
+      document.getElementById('food-search').value = barcode;
+      renderFoodPickList();
+      return;
+    }
+    const p = data.product;
+    const n = p.nutriments || {};
+    const kcalPer100 = +n['energy-kcal_100g'] || (+n['energy-kcal'] || 0);
+    const pPer100 = +n['proteins_100g'] || 0;
+    const cPer100 = +n['carbohydrates_100g'] || 0;
+    const fPer100 = +n['fat_100g'] || 0;
+    if (!kcalPer100 && !pPer100 && !cPer100 && !fPer100) {
+      _scanInFlight = false;
+      if (lookupEl) lookupEl.innerHTML = '';
+      alert(`Barcode ${barcode} found (${p.product_name || 'unknown'}) but Open Food Facts doesn't have nutrition data for it. Add it manually.`);
+      document.getElementById('food-search').value = p.product_name || barcode;
+      renderFoodPickList();
+      return;
+    }
+    let serving = 100, unit = 'g';
+    const ss = (p.serving_size || '').match(/(\d+(?:\.\d+)?)\s*(g|ml)/i);
+    if (ss) { serving = parseFloat(ss[1]); unit = ss[2].toLowerCase(); }
+    const factor = serving / 100;
+    const food = {
+      id: 'off-' + (p.code || barcode),
+      name: ((p.brands || '').split(',')[0].trim() ? (p.brands.split(',')[0].trim() + ' — ') : '') + (p.product_name || ('Barcode ' + barcode)),
+      serving, unit,
+      kcal: Math.round(kcalPer100 * factor),
+      p: Math.round(pPer100 * factor * 10) / 10,
+      c: Math.round(cPer100 * factor * 10) / 10,
+      f: Math.round(fPer100 * factor * 10) / 10
+    };
+    if (!state.foodDatabase) state.foodDatabase = [];
+    if (!state.foodDatabase.find(f => f.id === food.id)) {
+      state.foodDatabase.push(food);
+      saveState();
+    }
+    if (lookupEl) lookupEl.innerHTML = '';
+    _scanInFlight = false;
+    pickFood(food.id);
+  } catch (err) {
+    _scanInFlight = false;
+    alert('Lookup failed: ' + (err && err.message || err) + '\nCheck your connection.');
+  }
 }
 
 function toggleHabit(habitId) {
