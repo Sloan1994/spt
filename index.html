@@ -1386,8 +1386,11 @@
 <div class="modal-backdrop" id="foodPickerModal">
   <div class="modal">
     <h3>Log a food</h3>
-    <input type="text" class="food-search-input" id="food-search" placeholder="Search foods…" oninput="renderFoodPickList()" autocomplete="off" />
-    <div id="food-pick-list" style="max-height:50vh;overflow-y:auto;-webkit-overflow-scrolling:touch;margin:-4px 0 8px;"></div>
+    <input type="text" class="food-search-input" id="food-search" placeholder="Search foods or brands (e.g., 'Tesco protein yoghurt')…" oninput="renderFoodPickList()" autocomplete="off" />
+    <div id="food-pick-list-wrap" style="max-height:50vh;overflow-y:auto;-webkit-overflow-scrolling:touch;margin:-4px 0 8px;">
+      <div id="food-pick-list"></div>
+      <div id="food-pick-off"></div>
+    </div>
     <button class="btn btn-secondary" onclick="openAddCustomFood()">+ Add your own food</button>
     <button class="btn btn-ghost" onclick="closeFoodPicker()" style="margin-top:8px;">Cancel</button>
   </div>
@@ -3463,8 +3466,21 @@ function closeFoodPicker() {
   document.getElementById('foodPickerModal').classList.remove('show');
 }
 
+let _offSearchTimer = null;
+let _offLastQuery = '';
+window._offResults = {};
+
 function renderFoodPickList() {
-  const q = (document.getElementById('food-search').value || '').toLowerCase().trim();
+  const qRaw = (document.getElementById('food-search').value || '').trim();
+  const q = qRaw.toLowerCase();
+  // Debounced Open Food Facts search
+  clearTimeout(_offSearchTimer);
+  if (qRaw.length >= 2) {
+    _offSearchTimer = setTimeout(() => searchOpenFoodFacts(qRaw), 350);
+  } else {
+    document.getElementById('food-pick-off').innerHTML = '';
+    _offLastQuery = '';
+  }
   const all = state.foodDatabase || [];
   // Sort: matches first by name start, then by includes; user-created (id starts with 'u-') ranked first within equal score
   const filtered = q
@@ -3588,6 +3604,81 @@ function saveCustomFood() {
   // Pre-fill search with the new name so user sees it immediately
   document.getElementById('food-search').value = name;
   renderFoodPickList();
+}
+
+// ---------------------------------------------------------------------
+// Open Food Facts live search (free crowd-sourced food database)
+// ---------------------------------------------------------------------
+function searchOpenFoodFacts(q) {
+  q = (q || '').trim();
+  const listEl = document.getElementById('food-pick-off');
+  if (!q || q.length < 2) { listEl.innerHTML = ''; _offLastQuery = ''; return; }
+  if (q === _offLastQuery) return;
+  _offLastQuery = q;
+  listEl.innerHTML = `<div class="micro" style="padding:12px;text-align:center;color:var(--ink-faint);">Searching Open Food Facts…</div>`;
+  const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(q)}&fields=code,product_name,brands,nutriments,serving_size&page_size=15`;
+  fetch(url)
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+    .then(data => {
+      if (q !== _offLastQuery) return; // newer query in flight
+      const products = (data.products || []).filter(p => {
+        const n = p.nutriments || {};
+        return p.product_name && (n['energy-kcal_100g'] != null || n['energy-kcal'] != null);
+      });
+      if (products.length === 0) {
+        listEl.innerHTML = `<div class="micro" style="padding:12px;text-align:center;color:var(--ink-faint);">No Open Food Facts results.</div>`;
+        return;
+      }
+      window._offResults = {};
+      const rows = products.slice(0, 12).map(p => {
+        const n = p.nutriments || {};
+        const kcalPer100 = +n['energy-kcal_100g'] || (+n['energy-kcal'] || 0);
+        const pPer100   = +n['proteins_100g']     || 0;
+        const cPer100   = +n['carbohydrates_100g']|| 0;
+        const fPer100   = +n['fat_100g']          || 0;
+        let serving = 100, unit = 'g';
+        const ss = (p.serving_size || '').match(/(\d+(?:\.\d+)?)\s*(g|ml)/i);
+        if (ss) { serving = parseFloat(ss[1]); unit = ss[2].toLowerCase(); }
+        const factor = serving / 100;
+        const food = {
+          id: 'off-' + (p.code || ('q-' + Date.now())),
+          name: ((p.brands || '').split(',')[0].trim() ? (p.brands.split(',')[0].trim() + ' — ') : '') + p.product_name,
+          serving, unit,
+          kcal: Math.round(kcalPer100 * factor),
+          p: Math.round(pPer100 * factor * 10) / 10,
+          c: Math.round(cPer100 * factor * 10) / 10,
+          f: Math.round(fPer100 * factor * 10) / 10
+        };
+        window._offResults[food.id] = food;
+        return `
+          <div class="food-pick-item" onclick="pickOffFood('${food.id}')">
+            <div style="min-width:0;flex:1;">
+              <div class="food-pick-name">${escapeHtml(food.name)} <span class="micro" style="color:var(--accent);">· online</span></div>
+              <div class="food-pick-meta">${food.serving} ${escapeHtml(food.unit)} · ${food.p}g P · ${food.c}g C · ${food.f}g F</div>
+            </div>
+            <div class="food-pick-kcal">${food.kcal} kcal</div>
+          </div>`;
+      }).join('');
+      listEl.innerHTML = `
+        <div class="micro" style="padding:10px 12px 4px;color:var(--ink-faint);letter-spacing:0.08em;text-transform:uppercase;">From Open Food Facts</div>
+        ${rows}`;
+    })
+    .catch(err => {
+      console.error('OFF search failed', err);
+      listEl.innerHTML = `<div class="micro" style="padding:12px;text-align:center;color:var(--ink-faint);">Couldn't reach Open Food Facts.</div>`;
+    });
+}
+
+function pickOffFood(offId) {
+  const food = (window._offResults || {})[offId];
+  if (!food) return;
+  // Import into user database so it's available offline next time
+  if (!state.foodDatabase) state.foodDatabase = [];
+  if (!state.foodDatabase.find(f => f.id === food.id)) {
+    state.foodDatabase.push(food);
+    saveState();
+  }
+  pickFood(food.id);
 }
 
 function toggleHabit(habitId) {
