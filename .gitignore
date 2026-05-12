@@ -1,0 +1,4 @@
+# Local-only files; never deploy these
+.deploy-token
+.DS_Store
+.notes-local.md
