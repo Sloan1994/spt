@@ -1690,6 +1690,13 @@ function loadState() {
     ['nutrition', 'supplementLogs', 'supplementReminders', 'events', 'photos'].forEach(k => {
       if (parsed[k] === undefined) parsed[k] = def[k];
     });
+    // Migrate: ensure new default supplements get added to existing users' lists
+    if (Array.isArray(parsed.supplementReminders) && Array.isArray(def.supplementReminders)) {
+      const existingIds = new Set(parsed.supplementReminders.map(r => r.id));
+      def.supplementReminders.forEach(r => {
+        if (!existingIds.has(r.id)) parsed.supplementReminders.push({ ...r });
+      });
+    }
     return parsed;
   } catch (e) {
     console.error('State load failed', e);
@@ -1762,6 +1769,10 @@ function defaultState() {
     supplementReminders: [
       { id: 'creatine', name: 'Creatine 5g', time: '08:00', enabled: true },
       { id: 'vitd', name: 'Vitamin D3 2000 IU', time: '08:00', enabled: true },
+      { id: 'multimethyl', name: 'Methylated Multivitamin', time: '08:00', enabled: true },
+      { id: 'nad', name: 'NAD+', time: '08:00', enabled: true },
+      { id: 'methblue', name: 'Methylene Blue', time: '08:00', enabled: true },
+      { id: 'electrolytes', name: 'Electrolytes', time: '12:00', enabled: true },
       { id: 'omega3', name: 'Omega-3 2g', time: '12:00', enabled: true },
       { id: 'magnesium', name: 'Magnesium 300mg', time: '22:00', enabled: true }
     ],
