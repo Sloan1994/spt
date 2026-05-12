@@ -1086,6 +1086,74 @@
     color: white;
   }
 
+  /* Food log entries (My Fitness Pal-style) */
+  .food-entry {
+    display: flex;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .food-entry:last-of-type { border-bottom: none; }
+  .food-entry-info { flex: 1; min-width: 0; }
+  .food-entry-name {
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--ink);
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .food-entry-meta {
+    font-size: 11px;
+    color: var(--ink-faint);
+    margin-top: 2px;
+    letter-spacing: 0.02em;
+  }
+  .food-entry-kcal {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--ink);
+    margin: 0 8px 0 12px;
+    white-space: nowrap;
+  }
+  .food-entry-delete {
+    width: 28px;
+    height: 28px;
+    background: none;
+    border: none;
+    color: var(--ink-faint);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .food-entry-delete:active { background: var(--line-soft); }
+
+  .food-pick-item {
+    padding: 12px;
+    border-bottom: 1px solid var(--line-soft);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .food-pick-item:active { background: var(--line-soft); }
+  .food-pick-name { font-weight: 500; font-size: 14px; }
+  .food-pick-meta { font-size: 11px; color: var(--ink-faint); margin-top: 2px; }
+  .food-pick-kcal { font-weight: 600; font-size: 13px; color: var(--ink-soft); }
+  .food-search-input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 16px;
+    background: var(--surface);
+    margin-bottom: 12px;
+    font-family: inherit;
+  }
+
   /* Sub-nav for habits/recovery/etc */
   .sub-nav {
     display: flex;
@@ -1312,6 +1380,69 @@
 <!-- Photo Modal -->
 <div class="modal-backdrop" id="photoModal">
   <div class="modal" id="photoModalContent"></div>
+</div>
+
+<!-- Food Picker Modal -->
+<div class="modal-backdrop" id="foodPickerModal">
+  <div class="modal">
+    <h3>Log a food</h3>
+    <input type="text" class="food-search-input" id="food-search" placeholder="Search foods…" oninput="renderFoodPickList()" autocomplete="off" />
+    <div id="food-pick-list" style="max-height:50vh;overflow-y:auto;-webkit-overflow-scrolling:touch;margin:-4px 0 8px;"></div>
+    <button class="btn btn-secondary" onclick="openAddCustomFood()">+ Add your own food</button>
+    <button class="btn btn-ghost" onclick="closeFoodPicker()" style="margin-top:8px;">Cancel</button>
+  </div>
+</div>
+
+<!-- Servings Modal -->
+<div class="modal-backdrop" id="servingsModal">
+  <div class="modal">
+    <h3 id="servings-title">How much?</h3>
+    <p id="servings-info" class="micro" style="margin-bottom:12px;"></p>
+    <div class="field">
+      <label>Number of servings</label>
+      <input type="number" id="serv-count" step="0.25" value="1" min="0" inputmode="decimal" />
+    </div>
+    <p id="servings-preview" class="micro" style="margin-bottom:12px;"></p>
+    <button class="btn btn-primary" onclick="confirmLogFood()">Log it</button>
+    <button class="btn btn-ghost" onclick="closeServings()" style="margin-top:8px;">Cancel</button>
+  </div>
+</div>
+
+<!-- Add Custom Food Modal -->
+<div class="modal-backdrop" id="addFoodModal">
+  <div class="modal">
+    <h3 id="addFoodTitle">Add custom food</h3>
+    <p class="micro" style="margin-bottom:12px;">Macros are per serving. Saved to your personal food list.</p>
+    <div class="field">
+      <label>Food name</label>
+      <input type="text" id="cf-name" placeholder="e.g., My protein shake" />
+    </div>
+    <div class="field">
+      <label>Serving size</label>
+      <div style="display:flex;gap:8px;">
+        <input type="number" id="cf-serving" placeholder="100" step="0.1" inputmode="decimal" style="flex:1;" />
+        <input type="text" id="cf-unit" placeholder="g" style="flex:0 0 100px;" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Calories per serving</label>
+      <input type="number" id="cf-kcal" placeholder="0" inputmode="decimal" />
+    </div>
+    <div class="field">
+      <label>Protein (g)</label>
+      <input type="number" id="cf-p" placeholder="0" step="0.1" inputmode="decimal" />
+    </div>
+    <div class="field">
+      <label>Carbs (g)</label>
+      <input type="number" id="cf-c" placeholder="0" step="0.1" inputmode="decimal" />
+    </div>
+    <div class="field">
+      <label>Fat (g)</label>
+      <input type="number" id="cf-f" placeholder="0" step="0.1" inputmode="decimal" />
+    </div>
+    <button class="btn btn-primary" onclick="saveCustomFood()">Save</button>
+    <button class="btn btn-ghost" onclick="closeAddCustomFood()" style="margin-top:8px;">Cancel</button>
+  </div>
 </div>
 
 <script>
@@ -1687,7 +1818,7 @@ function loadState() {
     }
     // Migrate: add new fields if missing
     const def = defaultState();
-    ['nutrition', 'supplementLogs', 'supplementReminders', 'events', 'photos'].forEach(k => {
+    ['nutrition', 'foodDatabase', 'foodLogs', 'supplementLogs', 'supplementReminders', 'events', 'photos'].forEach(k => {
       if (parsed[k] === undefined) parsed[k] = def[k];
     });
     // Migrate: ensure new default supplements get added to existing users' lists
@@ -1757,6 +1888,44 @@ async function deletePhotoBlob(id) {
   });
 }
 
+function defaultFoodDatabase() {
+  return [
+    // Proteins
+    { id: 'chicken-breast', name: 'Chicken breast', serving: 100, unit: 'g', kcal: 165, p: 31,  c: 0,    f: 3.6 },
+    { id: 'salmon',         name: 'Salmon',         serving: 100, unit: 'g', kcal: 208, p: 20,  c: 0,    f: 13  },
+    { id: 'beef-mince-5',   name: 'Beef mince 5%',  serving: 100, unit: 'g', kcal: 137, p: 21,  c: 0,    f: 5   },
+    { id: 'egg-large',      name: 'Egg (large)',    serving: 1,   unit: 'egg', kcal: 72, p: 6.3, c: 0.4,  f: 4.8 },
+    { id: 'whey',           name: 'Whey scoop',     serving: 30,  unit: 'g', kcal: 120, p: 24,  c: 3,    f: 1.5 },
+    { id: 'greek-yogurt-0', name: 'Greek yogurt 0%', serving: 170, unit: 'g', kcal: 100, p: 17, c: 6,    f: 0   },
+    { id: 'tuna-water',     name: 'Tuna (in water)', serving: 100, unit: 'g', kcal: 116, p: 26, c: 0,    f: 0.8 },
+    { id: 'cottage-cheese', name: 'Cottage cheese', serving: 100, unit: 'g', kcal: 98,  p: 11,  c: 3.4,  f: 4.3 },
+    // Carbs
+    { id: 'oats',           name: 'Oats (raw)',     serving: 50,  unit: 'g', kcal: 195, p: 8.5, c: 33,   f: 3.5 },
+    { id: 'rice-white',     name: 'White rice (cooked)', serving: 100, unit: 'g', kcal: 130, p: 2.7, c: 28, f: 0.3 },
+    { id: 'rice-brown',     name: 'Brown rice (cooked)', serving: 100, unit: 'g', kcal: 112, p: 2.6, c: 24, f: 0.9 },
+    { id: 'sweet-potato',   name: 'Sweet potato (cooked)', serving: 100, unit: 'g', kcal: 86, p: 1.6, c: 20, f: 0.1 },
+    { id: 'pasta',          name: 'Pasta (cooked)', serving: 100, unit: 'g', kcal: 158, p: 5.8, c: 31, f: 0.9 },
+    { id: 'bread-whole',    name: 'Whole grain bread', serving: 1, unit: 'slice', kcal: 80, p: 4, c: 14, f: 1 },
+    { id: 'banana',         name: 'Banana (medium)', serving: 1, unit: 'banana', kcal: 105, p: 1.3, c: 27, f: 0.4 },
+    { id: 'apple',          name: 'Apple (medium)', serving: 1,  unit: 'apple', kcal: 95, p: 0.5, c: 25, f: 0.3 },
+    // Fats
+    { id: 'avocado',        name: 'Avocado (medium)', serving: 1, unit: 'avocado', kcal: 240, p: 3, c: 12, f: 22 },
+    { id: 'olive-oil',      name: 'Olive oil',      serving: 14, unit: 'g (1 tbsp)', kcal: 119, p: 0, c: 0, f: 14 },
+    { id: 'peanut-butter',  name: 'Peanut butter',  serving: 32, unit: 'g (2 tbsp)', kcal: 188, p: 8, c: 7, f: 16 },
+    { id: 'almonds',        name: 'Almonds',        serving: 28, unit: 'g', kcal: 164, p: 6, c: 6, f: 14 },
+    // Veg
+    { id: 'broccoli',       name: 'Broccoli',       serving: 100, unit: 'g', kcal: 34, p: 2.8, c: 7,   f: 0.4 },
+    { id: 'spinach',        name: 'Spinach',        serving: 100, unit: 'g', kcal: 23, p: 2.9, c: 3.6, f: 0.4 },
+    // Drinks
+    { id: 'milk-whole',     name: 'Whole milk',     serving: 240, unit: 'ml', kcal: 149, p: 8, c: 12, f: 8 },
+    { id: 'milk-semi',      name: 'Semi-skimmed milk', serving: 240, unit: 'ml', kcal: 122, p: 8, c: 12, f: 4.8 },
+    { id: 'beer-pint',      name: 'Beer (pint)',    serving: 568, unit: 'ml', kcal: 215, p: 1.7, c: 18, f: 0 },
+    { id: 'wine-red',       name: 'Red wine (175ml)', serving: 175, unit: 'ml', kcal: 158, p: 0, c: 4, f: 0 },
+    { id: 'coffee-black',   name: 'Black coffee',   serving: 240, unit: 'ml', kcal: 2,  p: 0.3, c: 0, f: 0 },
+    { id: 'tea-black',      name: 'Tea (no milk)',  serving: 240, unit: 'ml', kcal: 2,  p: 0,   c: 0, f: 0 }
+  ];
+}
+
 function defaultState() {
   return {
     programmes: [DEFAULT_PROGRAMME],
@@ -1765,6 +1934,8 @@ function defaultState() {
     dailyCheckins: {},    // { '2026-05-11': { weight, waist, sleep, energy, rhr, reflection } }
     dailyHabits: {},      // { '2026-05-11': { mobility: true, protein: true, ... } }
     nutrition: {},        // { '2026-05-11': { kcal: 2100, protein: 150, carbs: 230, fat: 60, notes: '' } }
+    foodDatabase: defaultFoodDatabase(),
+    foodLogs: {},         // { '2026-05-11': [{ foodId, name, servings, kcal, p, c, f }] }
     supplementLogs: {},   // { '2026-05-11': { creatine: true, vitd: true, ... } }
     supplementReminders: [
       { id: 'creatine', name: 'Creatine 5g', time: '08:00', enabled: true },
@@ -3119,25 +3290,57 @@ function deleteSupplement(idx) {
   renderRecovery();
 }
 
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function getDayTotals(dateK) {
+  const manual = state.nutrition[dateK] || {};
+  const logs = state.foodLogs[dateK] || [];
+  let kcal = 0, p = 0, c = 0, f = 0;
+  logs.forEach(e => { kcal += (+e.kcal) || 0; p += (+e.p) || 0; c += (+e.c) || 0; f += (+e.f) || 0; });
+  kcal += parseFloat(manual.kcal) || 0;
+  p += parseFloat(manual.protein) || 0;
+  c += parseFloat(manual.carbs) || 0;
+  f += parseFloat(manual.fat) || 0;
+  return { kcal, protein: p, carbs: c, fat: f };
+}
+
 function renderNutritionTab() {
   const dateK = todayISO();
-  const today = state.nutrition[dateK] || { kcal: '', protein: '', carbs: '', fat: '', notes: '' };
+  const manual = state.nutrition[dateK] || { kcal: '', protein: '', carbs: '', fat: '', notes: '' };
+  const logs = state.foodLogs[dateK] || [];
+  const totals = getDayTotals(dateK);
 
   // Targets — could come from active programme; using off-season defaults
   const targets = { kcal: 2100, protein: 160, carbs: 230, fat: 60 };
 
-  // Week average
+  // Week average (food log + manual)
   const weekDates = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     weekDates.push(d.toISOString().slice(0, 10));
   }
-  const weekEntries = weekDates.map(d => state.nutrition[d]).filter(Boolean);
-  const avgKcal = weekEntries.length ? (weekEntries.reduce((s, e) => s + (parseFloat(e.kcal) || 0), 0) / weekEntries.length).toFixed(0) : '—';
-  const avgProtein = weekEntries.length ? (weekEntries.reduce((s, e) => s + (parseFloat(e.protein) || 0), 0) / weekEntries.length).toFixed(0) : '—';
+  const weekTotals = weekDates.map(getDayTotals).filter(t => t.kcal > 0);
+  const avgKcal = weekTotals.length ? Math.round(weekTotals.reduce((s, t) => s + t.kcal, 0) / weekTotals.length) : '—';
+  const avgProtein = weekTotals.length ? Math.round(weekTotals.reduce((s, t) => s + t.protein, 0) / weekTotals.length) : '—';
 
   const pct = (val, target) => Math.min(100, (parseFloat(val) || 0) / target * 100);
+  const r1 = v => Math.round((+v || 0) * 10) / 10;
+
+  // Today's food entries
+  const foodsHTML = logs.length
+    ? logs.map((e, i) => `
+      <div class="food-entry">
+        <div class="food-entry-info">
+          <div class="food-entry-name">${escapeHtml(e.name)}</div>
+          <div class="food-entry-meta">${r1(e.servings)}${e.servings === 1 ? '' : '×'} ${escapeHtml(e.serving + ' ' + e.unit)} · ${r1(e.p)}P · ${r1(e.c)}C · ${r1(e.f)}F</div>
+        </div>
+        <div class="food-entry-kcal">${Math.round(e.kcal)}<span style="font-size:11px;color:var(--ink-faint);font-weight:400;"> kcal</span></div>
+        <button class="food-entry-delete" onclick="removeFoodLog(${i})" aria-label="Remove">×</button>
+      </div>`).join('')
+    : `<p class="micro" style="text-align:center;padding:20px 0;color:var(--ink-faint);margin:0;">No foods logged yet. Tap "+ Log Food" to start.</p>`;
 
   document.getElementById('recovery-content').innerHTML = `
     <div class="section-head">
@@ -3149,64 +3352,73 @@ function renderNutritionTab() {
       <div class="macro-bar">
         <div class="macro-bar-head">
           <span class="macro-bar-name">Calories</span>
-          <span class="macro-bar-values">${today.kcal || 0}<span class="target"> / ${targets.kcal} kcal</span></span>
+          <span class="macro-bar-values">${Math.round(totals.kcal)}<span class="target"> / ${targets.kcal} kcal</span></span>
         </div>
-        <div class="macro-bar-track"><div class="macro-bar-fill ${(parseFloat(today.kcal) || 0) > targets.kcal * 1.05 ? 'over' : ''}" style="width:${pct(today.kcal, targets.kcal)}%;"></div></div>
+        <div class="macro-bar-track"><div class="macro-bar-fill ${totals.kcal > targets.kcal * 1.05 ? 'over' : ''}" style="width:${pct(totals.kcal, targets.kcal)}%;"></div></div>
       </div>
       <div class="macro-bar">
         <div class="macro-bar-head">
           <span class="macro-bar-name">Protein</span>
-          <span class="macro-bar-values">${today.protein || 0}<span class="target"> / ${targets.protein} g</span></span>
+          <span class="macro-bar-values">${r1(totals.protein)}<span class="target"> / ${targets.protein} g</span></span>
         </div>
-        <div class="macro-bar-track"><div class="macro-bar-fill protein" style="width:${pct(today.protein, targets.protein)}%;"></div></div>
+        <div class="macro-bar-track"><div class="macro-bar-fill protein" style="width:${pct(totals.protein, targets.protein)}%;"></div></div>
       </div>
       <div class="macro-bar">
         <div class="macro-bar-head">
           <span class="macro-bar-name">Carbs</span>
-          <span class="macro-bar-values">${today.carbs || 0}<span class="target"> / ${targets.carbs} g</span></span>
+          <span class="macro-bar-values">${r1(totals.carbs)}<span class="target"> / ${targets.carbs} g</span></span>
         </div>
-        <div class="macro-bar-track"><div class="macro-bar-fill" style="width:${pct(today.carbs, targets.carbs)}%;"></div></div>
+        <div class="macro-bar-track"><div class="macro-bar-fill" style="width:${pct(totals.carbs, targets.carbs)}%;"></div></div>
       </div>
       <div class="macro-bar">
         <div class="macro-bar-head">
           <span class="macro-bar-name">Fat</span>
-          <span class="macro-bar-values">${today.fat || 0}<span class="target"> / ${targets.fat} g</span></span>
+          <span class="macro-bar-values">${r1(totals.fat)}<span class="target"> / ${targets.fat} g</span></span>
         </div>
-        <div class="macro-bar-track"><div class="macro-bar-fill" style="width:${pct(today.fat, targets.fat)}%;"></div></div>
+        <div class="macro-bar-track"><div class="macro-bar-fill" style="width:${pct(totals.fat, targets.fat)}%;"></div></div>
       </div>
     </div>
 
-    <div class="section-head">
-      <h2>Log Today</h2>
+    <div class="section-head" style="margin-top:20px;">
+      <h2>Today's Foods</h2>
+      <button class="btn-ghost" style="font-size:13px;border:none;background:none;color:var(--accent);font-weight:600;cursor:pointer;" onclick="openFoodPicker()">+ Log Food</button>
+    </div>
+    <div class="card" style="padding:6px 16px;">
+      ${foodsHTML}
+    </div>
+
+    <div class="section-head" style="margin-top:24px;">
+      <h2>Quick Add</h2>
+      <span class="micro" style="color:var(--ink-faint);">For items not in your list</span>
     </div>
     <div class="card">
       <div class="checkin-row">
         <div class="checkin-card">
           <label>Calories</label>
-          <input type="number" id="nu-kcal" value="${today.kcal}" inputmode="numeric" placeholder="0" onchange="saveNutrition()" /> <span class="unit">kcal</span>
+          <input type="number" id="nu-kcal" value="${manual.kcal}" inputmode="numeric" placeholder="0" onchange="saveNutrition()" /> <span class="unit">kcal</span>
         </div>
         <div class="checkin-card">
           <label>Protein</label>
-          <input type="number" id="nu-protein" value="${today.protein}" inputmode="numeric" placeholder="0" onchange="saveNutrition()" /> <span class="unit">g</span>
+          <input type="number" id="nu-protein" value="${manual.protein}" inputmode="numeric" placeholder="0" onchange="saveNutrition()" /> <span class="unit">g</span>
         </div>
       </div>
       <div class="checkin-row">
         <div class="checkin-card">
           <label>Carbs</label>
-          <input type="number" id="nu-carbs" value="${today.carbs}" inputmode="numeric" placeholder="0" onchange="saveNutrition()" /> <span class="unit">g</span>
+          <input type="number" id="nu-carbs" value="${manual.carbs}" inputmode="numeric" placeholder="0" onchange="saveNutrition()" /> <span class="unit">g</span>
         </div>
         <div class="checkin-card">
           <label>Fat</label>
-          <input type="number" id="nu-fat" value="${today.fat}" inputmode="numeric" placeholder="0" onchange="saveNutrition()" /> <span class="unit">g</span>
+          <input type="number" id="nu-fat" value="${manual.fat}" inputmode="numeric" placeholder="0" onchange="saveNutrition()" /> <span class="unit">g</span>
         </div>
       </div>
       <div class="field" style="margin-top:12px;">
         <label>Notes</label>
-        <textarea id="nu-notes" placeholder="What you ate, how it felt…" onchange="saveNutrition()">${today.notes || ''}</textarea>
+        <textarea id="nu-notes" placeholder="How you felt, what worked…" onchange="saveNutrition()">${manual.notes || ''}</textarea>
       </div>
     </div>
 
-    <div class="section-head">
+    <div class="section-head" style="margin-top:24px;">
       <h2>7-Day Average</h2>
     </div>
     <div class="stat-grid">
@@ -3232,10 +3444,150 @@ function saveNutrition() {
     notes: document.getElementById('nu-notes').value,
   };
   saveState();
-  // Don't re-render immediately to avoid losing focus; light update of bars only
-  const today = state.nutrition[dateK];
-  const targets = { kcal: 2100, protein: 160, carbs: 230, fat: 60 };
-  // Best to just leave the page; user will see updates on next render
+  // Don't re-render immediately to avoid losing focus; the next render will pick up the values.
+}
+
+// =====================================================================
+// FOOD LOGGING (MyFitnessPal-style)
+// =====================================================================
+let _pendingFood = null;  // currently selected food awaiting servings count
+
+function openFoodPicker() {
+  document.getElementById('food-search').value = '';
+  renderFoodPickList();
+  document.getElementById('foodPickerModal').classList.add('show');
+  setTimeout(() => { try { document.getElementById('food-search').focus(); } catch (e) {} }, 50);
+}
+
+function closeFoodPicker() {
+  document.getElementById('foodPickerModal').classList.remove('show');
+}
+
+function renderFoodPickList() {
+  const q = (document.getElementById('food-search').value || '').toLowerCase().trim();
+  const all = state.foodDatabase || [];
+  // Sort: matches first by name start, then by includes; user-created (id starts with 'u-') ranked first within equal score
+  const filtered = q
+    ? all.filter(f => f.name.toLowerCase().includes(q))
+    : all.slice();
+  filtered.sort((a, b) => {
+    const ua = a.id.startsWith('u-') ? 0 : 1;
+    const ub = b.id.startsWith('u-') ? 0 : 1;
+    if (ua !== ub) return ua - ub;
+    return a.name.localeCompare(b.name);
+  });
+  const list = document.getElementById('food-pick-list');
+  if (filtered.length === 0) {
+    list.innerHTML = `<p class="micro" style="padding:20px;text-align:center;color:var(--ink-faint);">No matches. Tap "+ Add your own food" below.</p>`;
+    return;
+  }
+  list.innerHTML = filtered.map(f => `
+    <div class="food-pick-item" onclick="pickFood('${f.id.replace(/'/g, "\\'")}')">
+      <div style="min-width:0;flex:1;">
+        <div class="food-pick-name">${escapeHtml(f.name)}${f.id.startsWith('u-') ? ' <span class="micro" style="color:var(--accent);">· yours</span>' : ''}</div>
+        <div class="food-pick-meta">${f.serving} ${escapeHtml(f.unit)} · ${f.p}g P · ${f.c}g C · ${f.f}g F</div>
+      </div>
+      <div class="food-pick-kcal">${f.kcal} kcal</div>
+    </div>`).join('');
+}
+
+function pickFood(foodId) {
+  const food = (state.foodDatabase || []).find(f => f.id === foodId);
+  if (!food) return;
+  _pendingFood = food;
+  document.getElementById('servings-title').textContent = food.name;
+  document.getElementById('servings-info').textContent = `1 serving = ${food.serving} ${food.unit} · ${food.kcal} kcal · ${food.p}g P · ${food.c}g C · ${food.f}g F`;
+  const inp = document.getElementById('serv-count');
+  inp.value = 1;
+  inp.oninput = updateServingsPreview;
+  updateServingsPreview();
+  document.getElementById('servingsModal').classList.add('show');
+  setTimeout(() => { try { inp.select(); } catch (e) {} }, 50);
+}
+
+function updateServingsPreview() {
+  if (!_pendingFood) return;
+  const n = parseFloat(document.getElementById('serv-count').value) || 0;
+  const r1 = v => Math.round((+v || 0) * 10) / 10;
+  document.getElementById('servings-preview').textContent =
+    `= ${Math.round(_pendingFood.kcal * n)} kcal · ${r1(_pendingFood.p * n)}g P · ${r1(_pendingFood.c * n)}g C · ${r1(_pendingFood.f * n)}g F`;
+}
+
+function closeServings() {
+  document.getElementById('servingsModal').classList.remove('show');
+  _pendingFood = null;
+}
+
+function confirmLogFood() {
+  if (!_pendingFood) return;
+  const n = parseFloat(document.getElementById('serv-count').value);
+  if (!n || n <= 0) { alert('Enter a number of servings greater than zero.'); return; }
+  const dateK = todayISO();
+  if (!state.foodLogs[dateK]) state.foodLogs[dateK] = [];
+  state.foodLogs[dateK].push({
+    foodId: _pendingFood.id,
+    name: _pendingFood.name,
+    servings: n,
+    serving: _pendingFood.serving,
+    unit: _pendingFood.unit,
+    kcal: _pendingFood.kcal * n,
+    p: _pendingFood.p * n,
+    c: _pendingFood.c * n,
+    f: _pendingFood.f * n,
+    when: new Date().toISOString()
+  });
+  saveState();
+  _pendingFood = null;
+  closeServings();
+  closeFoodPicker();
+  renderNutritionTab();
+  try { renderToday(); } catch (e) {}
+}
+
+function removeFoodLog(idx) {
+  const dateK = todayISO();
+  if (!state.foodLogs[dateK]) return;
+  state.foodLogs[dateK].splice(idx, 1);
+  saveState();
+  renderNutritionTab();
+  try { renderToday(); } catch (e) {}
+}
+
+function openAddCustomFood() {
+  const q = (document.getElementById('food-search').value || '').trim();
+  document.getElementById('cf-name').value = q || '';
+  document.getElementById('cf-serving').value = '';
+  document.getElementById('cf-unit').value = 'g';
+  document.getElementById('cf-kcal').value = '';
+  document.getElementById('cf-p').value = '';
+  document.getElementById('cf-c').value = '';
+  document.getElementById('cf-f').value = '';
+  document.getElementById('addFoodModal').classList.add('show');
+}
+
+function closeAddCustomFood() {
+  document.getElementById('addFoodModal').classList.remove('show');
+}
+
+function saveCustomFood() {
+  const name = (document.getElementById('cf-name').value || '').trim();
+  const serving = parseFloat(document.getElementById('cf-serving').value);
+  const unit = (document.getElementById('cf-unit').value || '').trim() || 'serving';
+  const kcal = parseFloat(document.getElementById('cf-kcal').value) || 0;
+  const p = parseFloat(document.getElementById('cf-p').value) || 0;
+  const c = parseFloat(document.getElementById('cf-c').value) || 0;
+  const f = parseFloat(document.getElementById('cf-f').value) || 0;
+  if (!name) { alert('Name is required.'); return; }
+  if (!serving || serving <= 0) { alert('Serving size must be a positive number.'); return; }
+
+  const id = 'u-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) + '-' + Date.now().toString(36);
+  if (!state.foodDatabase) state.foodDatabase = [];
+  state.foodDatabase.push({ id, name, serving, unit, kcal, p, c, f });
+  saveState();
+  closeAddCustomFood();
+  // Pre-fill search with the new name so user sees it immediately
+  document.getElementById('food-search').value = name;
+  renderFoodPickList();
 }
 
 function toggleHabit(habitId) {
