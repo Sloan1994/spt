@@ -1835,7 +1835,7 @@ function loadState() {
     }
     // Migrate: add new fields if missing
     const def = defaultState();
-    ['nutrition', 'foodDatabase', 'foodLogs', 'supplementLogs', 'supplementReminders', 'events', 'photos'].forEach(k => {
+    ['nutrition', 'foodDatabase', 'foodLogs', 'exerciseVideos', 'supplementLogs', 'supplementReminders', 'events', 'photos'].forEach(k => {
       if (parsed[k] === undefined) parsed[k] = def[k];
     });
     // Migrate: ensure new default supplements get added to existing users' lists
@@ -1953,6 +1953,7 @@ function defaultState() {
     nutrition: {},        // { '2026-05-11': { kcal: 2100, protein: 150, carbs: 230, fat: 60, notes: '' } }
     foodDatabase: defaultFoodDatabase(),
     foodLogs: {},         // { '2026-05-11': [{ foodId, name, servings, kcal, p, c, f }] }
+    exerciseVideos: {},   // { 'Trap bar deadlift': 'https://youtube.com/watch?v=...' }
     supplementLogs: {},   // { '2026-05-11': { creatine: true, vitd: true, ... } }
     supplementReminders: [
       { id: 'creatine', name: 'Creatine 5g', time: '08:00', enabled: true },
@@ -2455,6 +2456,11 @@ function openSession(weekNum, dayIdx) {
             </div>
             <div class="exercise-prescribed">${ex.prescribed}</div>
             ${ex.note ? `<div class="exercise-note">${ex.note}</div>` : ''}
+            <div style="margin-top:6px;font-size:12px;">
+              <a href="javascript:void(0)" onclick="openExerciseVideoByIdx(${i})" style="color:var(--accent);text-decoration:none;font-weight:500;">▶ Watch${(state.exerciseVideos && state.exerciseVideos[ex.name]) ? '' : ' on YouTube'}</a>
+              <span style="color:var(--ink-faint);margin:0 6px;">·</span>
+              <a href="javascript:void(0)" onclick="editExerciseVideoByIdx(${i})" style="color:var(--ink-faint);text-decoration:none;">${(state.exerciseVideos && state.exerciseVideos[ex.name]) ? 'change' : 'set link'}</a>
+            </div>
             ${suggestion ? `
               <div class="suggestion">
                 <span class="suggestion-label">Suggested:</span>
@@ -2499,6 +2505,53 @@ function openSession(weekNum, dayIdx) {
 function closeSession() {
   document.getElementById('sessionModal').classList.remove('show');
   currentSession = null;
+}
+
+function openExerciseVideoByIdx(i) {
+  if (!currentSession) return;
+  const ex = currentSession.day.exercises[i];
+  if (ex) openExerciseVideo(ex.name);
+}
+
+function editExerciseVideoByIdx(i) {
+  if (!currentSession) return;
+  const ex = currentSession.day.exercises[i];
+  if (ex) editExerciseVideo(ex.name);
+}
+
+function openExerciseVideo(name) {
+  const stored = (state.exerciseVideos || {})[name];
+  let url;
+  if (stored) {
+    url = stored;
+  } else {
+    // Default: open a YouTube search for this exercise
+    url = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(name + ' technique form');
+  }
+  try { window.open(url, '_blank', 'noopener,noreferrer'); }
+  catch (e) { window.location.href = url; }
+}
+
+function editExerciseVideo(name) {
+  const current = (state.exerciseVideos || {})[name] || '';
+  const input = prompt(
+    `YouTube link for "${name}".\n\nPaste any youtube.com or youtu.be URL.\nLeave blank and tap OK to remove.`,
+    current
+  );
+  if (input === null) return; // user cancelled
+  if (!state.exerciseVideos) state.exerciseVideos = {};
+  const trimmed = input.trim();
+  if (!trimmed) {
+    delete state.exerciseVideos[name];
+  } else if (!/^https?:\/\//i.test(trimmed)) {
+    alert('That doesn\'t look like a URL. It should start with https:// (e.g., https://youtu.be/abc123).');
+    return;
+  } else {
+    state.exerciseVideos[name] = trimmed;
+  }
+  saveState();
+  // Re-render the open session so the link text updates
+  if (currentSession) openSession(currentSession.weekNum, currentSession.dayIdx);
 }
 
 function readSessionFromForm() {
