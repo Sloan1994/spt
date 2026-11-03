@@ -1299,7 +1299,7 @@ function optCombine(p) {
   return { lift: r1(p.lift), cond: r1(p.cond), bowl: r1(p.bowl), strain: r1(p.strain), xtra: r1(xtra), total: r1(p.lift + est + xtra) };
 }
 function optIndex() { const m = {}; Object.values(S.sessions || {}).forEach(s => { (m[s.date] = m[s.date] || []).push(s); }); return m; }
-function optBowlLoad(b) { if (!b) return 0; const h = +(b.hours != null ? b.hours : b.h != null ? b.h : 0) || 0, f = b.feel != null ? b.feel : b.armFeel; return h * 6 * (f != null && f <= 2 ? 1.3 : 1); }
+function optBowlLoad(b) { if (!b) return 0; const h = +(b.hours != null ? b.hours : b.h != null ? b.h : 0) || 0, f = b.feel != null ? b.feel : b.armFeel != null ? b.armFeel : b.arm; return h * 6 * (f != null && f <= 2 ? 1.3 : 1); }
 function optDayParts(date, idx) {
   idx = idx || optIndex(); let lift = 0, cond = 0;
   (idx[date] || []).forEach(s => { lift += optLiftLoad(s); if (s.key === 'C') cond += optCondLoad(s); });
