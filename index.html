@@ -29,7 +29,7 @@
 @media (prefers-color-scheme:light){:root:not([data-theme]){--bg:#EFF3F0;--bg2:#E6ECE8;--surf:#FFFFFF;--surf2:#F2F6F3;--surf3:#E3EBE6;--ink:#0D1A14;--ink2:#4A5D53;--ink3:#7F9086;--line:rgba(10,50,35,.09);--line2:rgba(10,50,35,.16);--g:#0E7C5B;--g2:#0E7C5B;--gsoft:rgba(14,124,91,.10);--gdeep:#0E7C5B;--o:#E8790F;--osoft:rgba(242,140,40,.16);--onO:#fff;--red:#D6443A;--amber:#B97A06;--ok:#0E8A5F;--sh:0 1px 2px rgba(10,40,25,.06);color-scheme:light}}
 :root[data-theme=light]{--bg:#EFF3F0;--bg2:#E6ECE8;--surf:#FFFFFF;--surf2:#F2F6F3;--surf3:#E3EBE6;--ink:#0D1A14;--ink2:#4A5D53;--ink3:#7F9086;--line:rgba(10,50,35,.09);--line2:rgba(10,50,35,.16);--g:#0E7C5B;--g2:#0E7C5B;--gsoft:rgba(14,124,91,.10);--gdeep:#0E7C5B;--o:#E8790F;--osoft:rgba(242,140,40,.16);--onO:#fff;--red:#D6443A;--amber:#B97A06;--ok:#0E8A5F;--sh:0 1px 2px rgba(10,40,25,.06);color-scheme:light}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);overscroll-behavior:none;-webkit-text-size-adjust:100%}
+html,body{margin:0;height:100%;height:100dvh;background:var(--bg);color:var(--ink);overscroll-behavior:none;-webkit-text-size-adjust:100%}
 body{font:16px/1.35 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,system-ui,sans-serif;-webkit-font-smoothing:antialiased;position:fixed;inset:0;overflow:hidden}
 body.lock #screen{overflow:hidden}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;touch-action:manipulation}
@@ -207,7 +207,7 @@ body.resting #screen{padding-bottom:120px}
 <script>
 'use strict';
 /* ===== SPT v2 — core ===== */
-const APP_VERSION = '2.0.1', STATE_KEY = 'spt-v2', OLD_KEY = 'training-app-v1';
+const APP_VERSION = '2.0.2', STATE_KEY = 'spt-v2', OLD_KEY = 'training-app-v1';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
