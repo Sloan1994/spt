@@ -203,7 +203,7 @@ async function handle(req, env, ctx) {
     const n = url.searchParams.get('n');
     if (!n || !(await env.TOKENS.get('nonce:' + n))) return new Response('Link expired. Go back to SPT and tap Connect Whoop again.', { status: 401 });
     await env.TOKENS.delete('nonce:' + n);
-    const state = randomToken(12); await env.TOKENS.put('state:' + state, '1', { expirationTtl: 300 });
+    const state = randomToken(4) /* Whoop docs: state must be 8 chars */; await env.TOKENS.put('state:' + state, '1', { expirationTtl: 300 });
     const a = new URL(base(env) + '/oauth/oauth2/auth');
     a.search = new URLSearchParams({ response_type: 'code', client_id: env.WHOOP_CLIENT_ID, redirect_uri: workerOrigin(env, url) + '/auth/callback', scope: SCOPES, state }).toString();
     return Response.redirect(a.toString(), 302);
