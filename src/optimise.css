@@ -1,0 +1,41 @@
+/* ===== optimise pass ===== */
+:root{--ob:#5AA9E6}
+@media (prefers-color-scheme:light){:root:not([data-theme]){--ob:#2B7BC2}}
+:root[data-theme=light]{--ob:#2B7BC2}
+.o-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.o-tiles .o-tile{margin:0}
+.o-tile{display:flex;align-items:center;gap:10px;min-height:76px;padding:12px;border-left:4px solid var(--oz,var(--line2));text-align:left;width:100%}
+.o-tile.col{flex-direction:column;align-items:flex-start;gap:2px}
+.o-tx{display:flex;flex-direction:column;min-width:0;flex:1}
+.o-tile.col .o-tx{flex:none}
+.o-tx b{font-size:15px;letter-spacing:-.01em}
+.o-tx span{font-size:12.5px;color:var(--ink2);line-height:1.25}
+.o-big{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.o-ring{width:52px;height:52px;flex:none}
+.o-ring circle{fill:none;stroke-width:6}
+.o-ring .rt{stroke:var(--surf3)}
+.o-ring .rv{stroke:var(--oz);stroke-linecap:round}
+.o-ring text{fill:var(--ink);font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
+.o-adv{display:flex;align-items:center;gap:12px;margin:0 0 10px;border-left:4px solid var(--oz,var(--o));font-size:14.5px}
+.o-adv>div{flex:1;min-width:0}
+.o-adv .btn{flex:none}
+.o-bed{display:flex;align-items:center;gap:10px;margin:0 0 10px}
+.o-bed .grow{flex:1;min-width:0}
+.o-acts{display:flex;gap:8px;margin:10px 0 12px}
+.o-acts .btn{flex:1;width:auto}
+.o-hero{display:flex;align-items:baseline;gap:10px;margin:0 0 6px;color:var(--oz)}
+.o-hero b{font-size:48px;letter-spacing:-.04em;line-height:1}
+.o-hero span{font-size:16px;font-weight:700}
+.o-hotel{display:block;text-align:left;font-size:12.5px;color:var(--o);font-weight:600;min-height:44px;padding:4px 0;width:100%}
+.set.skp .set-r{opacity:.75}
+.set.skp .set-r .v:after{content:" · optional";color:var(--o);font-size:13px;font-weight:600}
+.o-mic{flex:none;width:56px}
+.o-mic svg{width:24px;height:24px;stroke:var(--ink);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;margin:auto}
+.o-mic.live{border-color:var(--o);background:var(--osoft)}
+.o-mic.live svg{stroke:var(--o)}
+.o-vx{font-size:14px;color:var(--ink2);background:var(--surf);border-radius:10px;padding:8px 12px;margin:0 0 8px}
+.o-dt .chip{font-size:14px;padding:0 10px}
+.o-lr{display:flex;align-items:center;gap:10px;min-height:36px;font-size:15px}
+.o-lr span:first-child{flex:1}
+.o-lr b{min-width:44px;text-align:right}
+.o-lr .faint{font-size:13px}
