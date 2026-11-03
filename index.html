@@ -207,7 +207,7 @@ body.resting #screen{padding-bottom:120px}
 <script>
 'use strict';
 /* ===== SPT v2 — core ===== */
-const APP_VERSION = '2.0.0', STATE_KEY = 'spt-v2', OLD_KEY = 'training-app-v1';
+const APP_VERSION = '2.0.1', STATE_KEY = 'spt-v2', OLD_KEY = 'training-app-v1';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -253,7 +253,7 @@ function defaultState() {
   return {
     version: 2,
     settings: {
-      theme: 'system', blockStart: '2026-11-02', targets: { kcal: 2600, p: 190, c: 300, f: 80 },
+      theme: 'dark', blockStart: '2026-11-02', targets: { kcal: 2600, p: 190, c: 300, f: 80 },
       supps: [
         { id: 'creatine', name: 'Creatine', dose: '5 g', when: 'Any time, daily', time: '08:00', rule: 'daily' },
         { id: 'd3', name: 'Vitamin D3', dose: '2000–4000 IU', when: 'With a meal', time: '12:30', rule: 'daily' },
