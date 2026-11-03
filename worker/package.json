@@ -1,0 +1,6 @@
+{
+  "name": "spt-whoop",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node test/unit.test.js", "dev": "wrangler dev", "deploy": "wrangler deploy" }
+}

@@ -72,7 +72,7 @@ h2{font-size:21px;margin:0 0 8px;letter-spacing:-.015em;font-weight:700}
 .chip[aria-pressed=true]{background:var(--g);border-color:var(--g);color:#fff}
 .chips.o .chip[aria-pressed=true]{background:var(--o);border-color:var(--o);color:var(--onO)}
 .seg{display:flex;background:var(--surf2);border-radius:11px;padding:3px;gap:2px}
-.seg button{flex:1;min-height:38px;border-radius:9px;font-weight:600;font-size:14px;color:var(--ink2)}
+.seg button{flex:1;min-height:44px;border-radius:9px;font-weight:600;font-size:14px;color:var(--ink2)}
 .seg button[aria-pressed=true]{background:var(--surf3);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.25)}
 .check{width:28px;height:28px;border-radius:50%;border:2px solid var(--line2);flex:none;display:flex;align-items:center;justify-content:center}
 .check svg{width:16px;height:16px;stroke:var(--onO);fill:none;stroke-width:3;opacity:0}
@@ -202,12 +202,33 @@ h2{font-size:21px;margin:0 0 8px;letter-spacing:-.015em;font-weight:700}
 body.resting #screen{padding-bottom:120px}
 .cgrid{display:grid;gap:4px}
 .cgrid .chip{min-width:0;padding:0}
+/* ===== Whoop ===== */
+:root{--wg:#16EC06;--wy:#FFDE00;--wr:#FF2D4B}
+@media (prefers-color-scheme:light){:root:not([data-theme]){--wg:#0B9E03;--wy:#B88A00;--wr:#DB0A2C}}
+:root[data-theme=light]{--wg:#0B9E03;--wy:#B88A00;--wr:#DB0A2C}
+.whc{margin-bottom:12px;border-left:4px solid var(--wz)}
+.wh-top{display:flex;align-items:center;gap:14px}
+.wh-top .grow{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+.ring{width:76px;height:76px;flex:none}
+.ring circle{fill:none;stroke-width:7}
+.ring .rt{stroke:var(--surf3)}
+.ring .rv{stroke:var(--wz);stroke-linecap:round}
+.ring text{fill:var(--ink);font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
+.wh-g{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:14px 0 12px}
+.wh-g .kv b{font-size:19px;white-space:nowrap}.wh-g .kv b small{font-size:11px;font-weight:600;color:var(--ink2)}
+.wh-g .kv span{font-size:11.5px;line-height:1.2}
+.wh-tip{font-size:14px;color:var(--ink);background:var(--surf2);border-radius:10px;padding:10px 12px}
+.whwait{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:12px 16px}.whwait .grow{flex:1}
+.hero.wz-g,.hero.wz-y,.hero.wz-r{border-left:4px solid var(--wz)}
+.wz-g{--wz:var(--wg)}.wz-y{--wz:var(--wy)}.wz-r{--wz:var(--wr)}
+.wchip{background:transparent;border:1.5px solid var(--wz);color:var(--ink);margin-left:6px;vertical-align:1px}
+#ptr{position:absolute;top:calc(var(--sat) + 6px);left:50%;transform:translateX(-50%);opacity:0;transition:opacity .15s;pointer-events:none;z-index:30;padding:6px 12px;font-size:13px}
 </style></head><body>
 <div id="app"><main id="screen"></main><div id="restbar" aria-live="polite"></div><nav id="nav" aria-label="Main"></nav><div id="sheets"></div><div id="toasts" aria-live="polite"></div></div>
 <script>
 'use strict';
 /* ===== SPT v2 — core ===== */
-const APP_VERSION = '2.0.2', STATE_KEY = 'spt-v2', OLD_KEY = 'training-app-v1';
+const APP_VERSION = '2.1.0', STATE_KEY = 'spt-v2', OLD_KEY = 'training-app-v1';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -253,7 +274,7 @@ function defaultState() {
   return {
     version: 2,
     settings: {
-      theme: 'dark', blockStart: '2026-11-02', targets: { kcal: 2600, p: 190, c: 300, f: 80 },
+      theme: 'dark', blockStart: '2026-11-02', whoop: { url: '', key: '', connected: false, since: '', last: 0, seeded: false }, targets: { kcal: 2600, p: 190, c: 300, f: 80 },
       supps: [
         { id: 'creatine', name: 'Creatine', dose: '5 g', when: 'Any time, daily', time: '08:00', rule: 'daily' },
         { id: 'd3', name: 'Vitamin D3', dose: '2000–4000 IU', when: 'With a meal', time: '12:30', rule: 'daily' },
@@ -264,14 +285,14 @@ function defaultState() {
         { id: 'lytes', name: 'Electrolytes', dose: '1 serving', when: 'Day C and sauna days', time: '', rule: 'Csauna' }
       ]
     },
-    slotStatus: {}, slotDate: {}, swaps: {}, sessions: {}, checkins: {}, suppLog: {}, mobLog: {}, food: {}, foodCache: {}, photos: [], flags: {}, u: 0
+    slotStatus: {}, slotDate: {}, swaps: {}, sessions: {}, checkins: {}, suppLog: {}, mobLog: {}, food: {}, foodCache: {}, photos: [], flags: {}, whoop: {}, u: 0
   };
 }
 let S = loadState();
 function loadState() {
   try {
     const raw = localStorage.getItem(STATE_KEY);
-    if (raw) { const o = JSON.parse(raw); if (o && o.version === 2) { const d = defaultState(); const m = Object.assign(d, o); m.settings = Object.assign(d.settings, o.settings || {}); m.settings.targets = Object.assign(d.settings.targets, (o.settings || {}).targets || {}); return m; } }
+    if (raw) { const o = JSON.parse(raw); if (o && o.version === 2) { const d = defaultState(); const m = Object.assign(d, o); m.settings = Object.assign(d.settings, o.settings || {}); m.settings.targets = Object.assign(d.settings.targets, (o.settings || {}).targets || {}); m.settings.whoop = Object.assign(d.settings.whoop, (o.settings || {}).whoop || {}); if (!m.whoop || typeof m.whoop !== 'object') m.whoop = {}; return m; } }
   } catch (e) { console.warn('state load failed', e); }
   return defaultState();
 }
@@ -544,7 +565,11 @@ function setsSummary(sets) {
   const n = sets.length, r = Math.round(sets.reduce((a, s) => a + (s.r || 0), 0) / n), top = Math.max(...sets.map(s => s.w || 0)), rp = Math.max(...sets.map(s => s.rpe || 0));
   return `${n}×${r}${top ? ' @ ' + fmtN(top) + 'kg' : ''}${rp ? ' RPE ' + fmtN(rp) : ''}`;
 }
-function suggestLoad(name, p) {
+function suggestLoad(name, p, date = isoDate()) {
+  const r = suggestLoadBase(name, p, whoopRed(date));
+  return whoopRed(date) ? Object.assign({}, r, { why: (r.why ? r.why + ' · ' : '') + 'recovery red: holding' }) : r;
+}
+function suggestLoadBase(name, p, hold) {
   const last = exLogs(name)[0], lastTxt = last ? `Last: ${setsSummary(last.sets)}` : '';
   if (p.load.type === 'kg' && p.load.value != null) return { kg: p.load.value, why: lastTxt ? `${lastTxt}. Prescribed ${p.load.value}kg` : `Prescribed ${p.load.value}kg` };
   if (p.load.type === 'time' || p.load.type === 'distance') return { kg: null, why: lastTxt };
@@ -555,7 +580,7 @@ function suggestLoad(name, p) {
   const hit = last.sets.every(s => (s.r || 0) >= tr) && last.sets.length >= (last.tgt ? last.tgt.sets : 1);
   const maxR = Math.max(...last.sets.map(s => s.rpe || 0)), allLow = last.sets.every(s => (s.rpe || 0) <= trpe - 1);
   const step = p.swapGroup === 'lower' ? 5 : 2.5;
-  if (hit && allLow) return { kg: r05(top + step), why: `${lastTxt} → try ${r05(top + step)}kg` };
+  if (hit && allLow && !hold) return { kg: r05(top + step), why: `${lastTxt} → try ${r05(top + step)}kg` };
   if (maxR >= trpe + 1) return { kg: r05(top * .95), why: `${lastTxt} (felt hard) → try ${r05(top * .95)}kg` };
   return { kg: top, why: hit ? `${lastTxt} → hold ${top}kg` : `${lastTxt} (reps missed) → hold ${top}kg` };
 }
@@ -573,6 +598,7 @@ function suppsFor(date, key) {
 }
 /* ===== helpers shared ===== */
 const getCI = d => S.checkins[d] || {};
+const srcWithout = (d, k) => { const s = Object.assign({}, getCI(d).src); delete s[k]; return s; };
 function setCI(d, patch) { S.checkins[d] = Object.assign({}, S.checkins[d], patch, { u: Date.now() }); saveState(); }
 const exLink = (n, cls = '') => `<button class="${cls}" data-action="exhist" data-ex="${esc(n)}">${esc(n)}</button>`;
 function prescList(key, wk) {
@@ -586,10 +612,11 @@ screens.today = () => {
   if (localStorage.getItem(OLD_KEY) && !S.flags.oldDismissed) {
     h += `<div class="card pad" style="margin-bottom:12px"><b>Old tracker data found</b><div class="muted" style="font-size:14px;margin:4px 0 10px">SPT v2 starts clean. Save a copy of the old data before you forget. It stays untouched on this device.</div><div style="display:flex;gap:8px"><button class="btn sm pri" data-action="oldbackup">Download old data backup (JSON)</button><button class="btn sm ghost" data-action="olddismiss">Hide</button></div></div>`;
   }
+  h += recoveryCard(date);
   /* hero */
   if (c.phase === 'in' && (c.key === 'A' || c.key === 'B' || c.key === 'C') && slot) {
     const s = sessionOf(slot), st = s ? sessionStats(s) : null, done = s && s.status === 'done';
-    h += `<div class="hero"><div class="letter">${c.key}</div><span class="tag" style="background:rgba(255,255,255,.16);color:#fff;position:relative">${info.name}</span><h2>${info.title}</h2><div class="meta">${c.key === 'C' ? DAY_C.rounds[slot.w - 1] + ' rounds' : DAYS[c.key].length + ' exercises'} · week ${slot.w}${slot.w === 4 ? ', deload' : ''}${c.status ? ' · ' + c.status : ''}</div><ul>`;
+    h += `<div class="hero${wzCls(date)}"><div class="letter">${c.key}</div><span class="tag" style="background:rgba(255,255,255,.16);color:#fff;position:relative">${info.name}</span><h2>${info.title}</h2><div class="meta">${c.key === 'C' ? DAY_C.rounds[slot.w - 1] + ' rounds' : DAYS[c.key].length + ' exercises'} · week ${slot.w}${slot.w === 4 ? ', deload' : ''}${c.status ? ' · ' + c.status : ''}</div><ul>`;
     if (c.key === 'C') {
       h += `<li><span style="opacity:1;font-weight:600">Warm-up</span><span style="white-space:normal;text-align:right">${esc(DAY_C.warm)}</span></li>`;
       DAY_C.steps(slot.w).forEach(([a, b]) => { h += `<li><b style="font-weight:600">${a}</b><span>${b}</span></li>`; });
@@ -599,7 +626,7 @@ screens.today = () => {
     h += `<button class="btn pri" data-action="startsession" data-slot="${slot.id}">${done ? 'Review session' : s && st.sets + st.rounds ? `Continue session · ${st.sets + st.rounds} done` : 'Start session'}</button></div>`;
   } else if (c.phase === 'in') {
     const z = c.key === 'Z';
-    h += `<div class="hero rest"><div class="letter">${z ? 'Z2' : '–'}</div><h2>${c.moved ? 'Rest' : esc(info.name)}</h2><div class="meta">${c.moved ? 'Session moved to another day.' : esc(info.title)}</div>`;
+    h += `<div class="hero rest${wzCls(date)}"><div class="letter">${z ? 'Z2' : '–'}</div><h2>${c.moved ? 'Rest' : esc(info.name)}</h2><div class="meta">${c.moved ? 'Session moved to another day.' : esc(info.title)}</div>`;
     h += `<ul><li><span style="opacity:1">${z ? 'Easy conversational pace, 30–40 min. Nasal breathing if you can. Bowling counts if it was a real practice block.' : 'Walk, play, sleep. Do the mobility below.'}</span></li></ul>`;
     if (slot && z) h += `<button class="btn ${c.status === 'done' ? '' : 'pri'}" data-action="slotmark" data-slot="${slot.id}" data-st="${c.status === 'done' ? '' : 'done'}">${c.status === 'done' ? 'Done. Tap to undo' : 'Mark done'}</button>`;
     h += `</div>`;
@@ -639,7 +666,7 @@ actions.olddismiss = () => { S.flags.oldDismissed = true; saveState(); render();
 actions.startsession = el => { const slot = allSlots().find(s => s.id === el.dataset.slot); if (!slot) return; ensureSession(slot); ui.trainSlot = slot.id; ui.act = null; closeSheet(true); vib(10); go('train'); };
 actions.slotmark = el => { const id = el.dataset.slot; if (el.dataset.st) S.slotStatus[id] = el.dataset.st; else delete S.slotStatus[id]; saveState(); vib(8); closeSheet(true); render(); };
 actions.qdoms = el => { setCI(isoDate(), { doms: +el.dataset.v }); vib(6); render(); };
-inputs.qsleep = el => { const v = num(el.value); debounced('qsleep', () => { if (v != null && v >= 0 && v <= 24) { setCI(isoDate(), { sleepH: v }); if (getCI(isoDate()).doms != null) render(); } }); };
+inputs.qsleep = el => { const v = num(el.value); debounced('qsleep', () => { if (v != null && v >= 0 && v <= 24) { setCI(isoDate(), { sleepH: v, src: srcWithout(isoDate(), 'sleepH') }); if (getCI(isoDate()).doms != null) render(); } }); };
 actions.mobtoggle = el => { const d = isoDate(); const m = S.mobLog[d] = S.mobLog[d] || {}; m[el.dataset.id] = !m[el.dataset.id]; if (!m[el.dataset.id]) delete m[el.dataset.id]; saveState(); vib(6); render(); };
 actions.supptoggle = el => { const d = el.dataset.date, m = S.suppLog[d] = S.suppLog[d] || {}; if (m[el.dataset.id]) delete m[el.dataset.id]; else m[el.dataset.id] = Date.now(); saveState(); vib(6); render(); };
 
@@ -698,7 +725,7 @@ actions.slotmove = el => {
 /* ===== SETTINGS ===== */
 function settingsHTML() {
   const t = S.settings.targets, th = S.settings.theme;
-  let h = `<div class="sec">Appearance</div><div class="seg">${['system', 'light', 'dark'].map(x => `<button data-action="theme" data-v="${x}" aria-pressed="${th === x}">${x[0].toUpperCase() + x.slice(1)}</button>`).join('')}</div>`;
+  let h = whoopSettingsHTML() + `<div class="sec">Appearance</div><div class="seg">${['system', 'light', 'dark'].map(x => `<button data-action="theme" data-v="${x}" aria-pressed="${th === x}">${x[0].toUpperCase() + x.slice(1)}</button>`).join('')}</div>`;
   h += `<div class="sec">Daily nutrition targets</div><div class="card pad"><div class="grid2">${[['kcal', 'Calories'], ['p', 'Protein (g)'], ['c', 'Carbs (g)'], ['f', 'Fat (g)']].map(([k, l]) => `<div><div class="lbl" style="margin-top:0">${l}</div><input inputmode="numeric" data-in="target" data-k="${k}" value="${t[k]}" aria-label="${l}"></div>`).join('')}</div></div>`;
   h += `<div class="sec"><span>Supplements</span><button data-action="suppedit" data-id="">Add</button></div><div class="card">${S.settings.supps.map(s => `<button class="row" data-action="suppedit" data-id="${s.id}"><div class="grow"><div class="t">${esc(s.name)}</div><div class="s">${esc(s.dose)} · ${esc(s.when)}${s.time ? ' · ' + s.time : ''}</div></div>${chev}</button>`).join('')}</div>`;
   h += `<div class="sec">Data</div><div class="card"><button class="row" data-action="export"><div class="grow"><div class="t">Export everything</div><div class="s">JSON with progress photos included</div></div>${chev}</button><label class="row" style="cursor:pointer"><div class="grow"><div class="t">Import from a backup</div><div class="s">Merges with what is on this device</div></div>${chev}<input type="file" accept="application/json,.json" data-in="importfile" style="position:absolute;opacity:0;width:1px;height:1px"></label>`;
@@ -754,7 +781,8 @@ function exHeadHTML(s, ei) {
   const e = s.ex[ei], t = e.tgt, done = e.sets.filter(x => x.done).length, sg = suggestLoadFor(e);
   return `<div class="ex-h"><div style="flex:1;min-width:0"><button class="nm" data-action="exhist" data-ex="${esc(e.name)}">${esc(e.name)}</button>${e.name !== e.orig ? `<span class="pill o" style="margin-left:6px">swapped</span>` : ''}<div class="pr">${prescText(t)} · rest ${t.rest}s</div>${sg.why ? `<div class="sg">${esc(sg.why)}</div>` : ''}${t.note ? `<div class="pr">${esc(t.note)}</div>` : ''}${t.alt ? `<div class="pr">Alt: ${esc(t.alt)}</div>` : ''}</div><span class="pill ${done === e.sets.length ? 'g' : ''} tn">${done}/${e.sets.length}</span><button class="ib" data-action="exnote" data-ex="${ei}" aria-label="Notes">${ico('note')}</button><button class="ib" data-action="swap" data-ex="${ei}" aria-label="Swap exercise">${ico('swap')}</button></div>`;
 }
-const suggestLoadFor = e => suggestLoad(e.name, e.tgt);
+const recDate = s => s && s.status === 'done' ? s.date : isoDate();
+const suggestLoadFor = e => suggestLoad(e.name, e.tgt, recDate(curSess));
 function exHTML(s, ei) {
   const e = s.ex[ei];
   if (e.skipped) return `<div class="card ex opt" data-exc="${ei}"><div class="row"><div class="grow"><div class="t">${esc(e.name)}</div><div class="s">Optional this week. Skipped.</div></div><button class="btn sm" data-action="exunskip" data-ex="${ei}">Do it</button></div></div>`;
@@ -770,7 +798,7 @@ screens.train = () => {
   }
   const i = DAY_INFO[slot.key], s = sessionOf(slot);
   curSess = s; ui.trainSess = () => curSess;
-  let h = `<h1>${i.name}</h1><p class="sub">${i.title} · week ${slot.w} · ${fmtDate(slot.date, { weekday: 'short', day: 'numeric', month: 'short' })}</p>`;
+  let h = `<h1>${i.name}</h1><p class="sub">${i.title} · week ${slot.w} · ${fmtDate(slot.date, { weekday: 'short', day: 'numeric', month: 'short' })}${s ? recChip(recDate(s)) : recChip(isoDate())}</p>`;
   if (!s) return h + `<div class="card pad"><p style="margin:0 0 12px">${slot.key === 'C' ? DAY_C.rounds[slot.w - 1] + ' rounds. Log each round time.' : DAYS[slot.key].length + ' exercises. Your sets save as you go.'}</p><button class="btn pri" data-action="startsession" data-slot="${slot.id}">Start session</button></div><button class="btn ghost" style="margin-top:10px" data-action="pickslot">Choose another session</button>`;
   const st = sessionStats(s);
   h += `<div class="sess-bar">${s.key === 'C' ? `<div class="kv"><b id="st-sets">${st.rounds}/${s.rounds.length}</b><span>rounds</span></div>` : `<div class="kv"><b id="st-sets">${st.sets}</b><span>sets</span></div><div class="kv"><b id="st-ton">${st.ton.toLocaleString('en-IE')}</b><span>kg lifted</span></div>`}<div class="kv"><b id="sesstime">${fmtDur(st.dur)}</b><span>time</span></div><div style="flex:1"></div>${s.status === 'done' ? '<span class="pill g">Complete</span>' : '<span class="pill">Draft</span>'}</div>`;
@@ -897,7 +925,7 @@ function chipRow(k, from, to, cur) {
 screens.log = () => {
   const d = ui.logDate, ci = getCI(d), today = d === isoDate(), c = ctxFor(d), t = S.settings.targets, tot = dayTotals(d);
   let h = `<h1>Log</h1><div style="display:flex;align-items:center;justify-content:space-between;margin:2px 0 6px"><button class="ib" data-action="logday" data-n="-1" aria-label="Previous day">‹</button><b>${today ? 'Today' : fmtDate(d, { weekday: 'short', day: 'numeric', month: 'short' })}</b><button class="ib" data-action="logday" data-n="1" aria-label="Next day" ${today ? 'disabled style="opacity:.3"' : ''}>›</button></div>`;
-  const inp = (k, l, ph, mode = 'decimal') => `<div><div class="lbl" style="margin-top:0">${l}</div><input data-in="ci" data-k="${k}" inputmode="${mode}" placeholder="${ph}" value="${ci[k] ?? ''}" aria-label="${l}"></div>`;
+  const inp = (k, l, ph, mode = 'decimal') => `<div><div class="lbl" style="margin-top:0">${l}${ci.src && ci.src[k] === 'whoop' ? ' <span class="pill g" style="font-weight:600">from Whoop</span>' : ''}</div><input data-in="ci" data-k="${k}" inputmode="${mode}" placeholder="${ph}" value="${ci[k] ?? ''}" aria-label="${l}"></div>`;
   h += `<div class="sec" style="margin-top:8px">Check-in</div><div class="card pad"><div class="two">${inp('bw', 'Bodyweight (kg)', '84.5')}${inp('sleepH', 'Sleep (hours)', '7.5')}</div><div class="lbl">Sleep quality (1 poor, 5 great)</div>${chipRow('sleepQ', 1, 5, ci.sleepQ, 'o')}<div class="lbl">Soreness (0 none, 10 worst)</div>${chipRow('doms', 0, 10, ci.doms, 'o')}<div class="lbl">Energy (1 flat, 5 buzzing)</div>${chipRow('energy', 1, 5, ci.energy, 'o')}<div class="two" style="margin-top:10px">${inp('hr', 'Resting HR (optional)', '52', 'numeric')}<div></div></div><div class="lbl">Note</div><textarea data-in="ci" data-k="note" placeholder="Anything worth remembering" aria-label="Note">${esc(ci.note || '')}</textarea></div>`;
   h += suppCard(d, c.key);
   const bar = (l, v, tg, u) => `<div class="mb ${v > tg ? 'over' : ''}"><b>${Math.round(v)}<small>${u}</small></b><div class="tr"><i style="width:${Math.min(100, v / tg * 100)}%"></i></div><span>${l} of ${tg}</span></div>`;
@@ -910,7 +938,7 @@ screens.log = () => {
 actions.logday = el => { const n = addDays(ui.logDate, +el.dataset.n); if (n > isoDate()) return; ui.logDate = n; render(false); };
 inputs.ci = el => {
   const k = el.dataset.k;
-  debounced('ci' + k, () => { const v = k === 'note' ? el.value : num(el.value); setCI(ui.logDate, { [k]: v == null || v === '' ? null : v }); });
+  debounced('ci' + k, () => { const v = k === 'note' ? el.value : num(el.value); setCI(ui.logDate, { [k]: v == null || v === '' ? null : v, src: srcWithout(ui.logDate, k) }); });
 };
 actions.cichip = el => { const k = el.dataset.k, v = +el.dataset.v; setCI(ui.logDate, { [k]: getCI(ui.logDate)[k] === v ? null : v }); vib(6); render(); };
 actions.foodentry = el => {
@@ -1090,7 +1118,7 @@ screens.progress = () => {
   for (let w = 1; w <= cur; w++) {
     const ws = addDays(BLOCK.start, (w - 1) * 7), we = addDays(ws, 6), done = allSlots().filter(s => s.w === w && DAY_INFO[s.key].gym && S.slotStatus[s.id] === 'done').length;
     const cis = Object.entries(S.checkins).filter(([d]) => d >= ws && d <= we).map(e => e[1]), avg = k => { const v = cis.map(c => c[k]).filter(x => x != null); return v.length ? r1(v.reduce((a, b) => a + b, 0) / v.length) : '–'; };
-    h += `<div class="card wk"><div class="muted" style="font-size:13px;font-weight:600">Week ${w}${w === 4 ? ' deload' : ''}</div><div class="kv" style="margin:6px 0"><b>${Math.round(done / 3 * 100)}%</b><span>adherence · ${done}/3 sessions</span></div><div class="s" style="font-size:13px;color:var(--ink2)">Soreness ${avg('doms')} · sleep ${avg('sleepH')} h</div></div>`;
+    h += `<div class="card wk"><div class="muted" style="font-size:13px;font-weight:600">Week ${w}${w === 4 ? ' deload' : ''}</div><div class="kv" style="margin:6px 0"><b>${Math.round(done / 3 * 100)}%</b><span>adherence · ${done}/3 sessions</span></div><div class="s" style="font-size:13px;color:var(--ink2)">Soreness ${avg('doms')} · sleep ${avg('sleepH')} h</div>${whoopWeek(ws, we)}</div>`;
   }
   h += `</div>`;
   /* bodyweight */
@@ -1113,6 +1141,7 @@ screens.progress = () => {
   const days = []; for (let i = 27; i >= 0; i--) days.push(addDays(today, -i)); const sl = [], dm = [];
   days.forEach((d, i) => { const c = S.checkins[d]; if (c && c.sleepH != null) sl.push([i, c.sleepH]); if (c && c.doms != null) dm.push([i, c.doms]); });
   h += chartCard('Sleep vs soreness', 'last 28 days', sl.length + dm.length > 2 ? chartSVG({ label: 'Sleep vs soreness', y2: true, yr: [4, 10], yr2: [0, 10], xmin: 0, xmax: 27, series: [{ pts: sl, color: 'var(--g2)' }, { pts: dm, color: 'var(--o)', axis: 2 }], xt: [[0, fmtShort(days[0])], [27, 'Today']], legend: [['Sleep (h, left)', 'var(--g2)'], ['Soreness (0–10, right)', 'var(--o)']] }) : '', 'Log sleep and soreness for a few days to compare them.');
+  h += whoopCharts(today);
   /* Day C */
   const cs = Object.values(S.sessions).filter(s => s.key === 'C' && s.rounds.some(Boolean)).sort((a, b) => a.week - b.week), colors = ['var(--g2)', 'var(--o)', '#5AA9E6', '#C58AF9'];
   const ser = []; for (let r = 0; r < 4; r++) { const pts = cs.filter(s => s.rounds[r]).map(s => [s.week, s.rounds[r] / 60]); if (pts.length) ser.push({ pts, color: colors[r], name: 'Round ' + (r + 1) }); }
@@ -1177,7 +1206,8 @@ function downloadBlob(blob, name) { const a = document.createElement('a'); a.hre
 const blobToDataURL = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
 async function buildExport() {
   const photos = []; for (const p of S.photos) { try { const r = await getPhoto(p.id); if (r && r.blob) photos.push({ id: p.id, date: p.date, w: p.w, h: p.h, dataUrl: await blobToDataURL(r.blob) }); } catch (e) { } }
-  return { version: 2, app: 'SPT', exportedAt: new Date().toISOString(), state: S, photos };
+  const st = Object.assign({}, S, { settings: Object.assign({}, S.settings, { whoop: Object.assign({}, S.settings.whoop, { key: '' }) }) });   /* never export the Worker app key */
+  return { version: 2, app: 'SPT', exportedAt: new Date().toISOString(), state: st, photos };
 }
 actions.export = async () => {
   try { const o = await buildExport(); downloadBlob(new Blob([JSON.stringify(o)], { type: 'application/json' }), `spt-export-${isoDate()}.json`); toast(`Exported ${S.photos.length} photos and all logs`); } catch (e) { console.error(e); toast('Export failed'); }
@@ -1195,18 +1225,190 @@ inputs.importfile = async el => {
 function mergeKeyed(a, b) { a = a || {}; Object.entries(b || {}).forEach(([k, v]) => { if (!(k in a)) a[k] = v; else if (v && typeof v === 'object' && !Array.isArray(v) && (v.u || 0) > (a[k].u || 0)) a[k] = v; }); return a; }
 async function mergeImport(o) {
   const s = o.state, stats = { added: 0 };
-  ['sessions', 'checkins', 'suppLog', 'mobLog', 'slotStatus', 'slotDate', 'foodCache'].forEach(k => { S[k] = mergeKeyed(S[k], s[k]); });
+  ['sessions', 'checkins', 'suppLog', 'mobLog', 'slotStatus', 'slotDate', 'foodCache', 'whoop'].forEach(k => { S[k] = mergeKeyed(S[k], s[k]); });
   Object.entries(s.swaps || {}).forEach(([b, m]) => { S.swaps[b] = Object.assign({}, m, S.swaps[b] || {}); });
   Object.entries(s.food || {}).forEach(([d, arr]) => { const cur = S.food[d] = S.food[d] || []; arr.forEach(e => { if (!cur.some(x => x.id === e.id)) cur.push(e); }); });
   for (const p of o.photos || []) { if (S.photos.some(x => x.id === p.id)) continue; try { const blob = await (await fetch(p.dataUrl)).blob(); await putPhoto(p.id, blob); S.photos.push({ id: p.id, date: p.date, w: p.w, h: p.h }); } catch (e) { console.warn('photo import', e); } }
   saveState();
 }
 actions.importok = async () => { if (!pendingImport) return; await mergeImport(pendingImport); pendingImport = null; closeSheet(true); toast('Backup merged'); render(); };
+/* ===== WHOOP (via the spt-whoop Cloudflare Worker) ===== */
+const WH = () => S.settings.whoop;
+const whoopMock = () => { try { return localStorage.getItem('spt-whoop-mock') === '1'; } catch (e) { return false; } };
+const whoopOn = () => whoopMock() || !!(WH().connected && WH().url && WH().key);
+ui.whoop = { busy: false, offline: false, err: '' };
+const WZ = { g: { c: 'var(--wg)', n: 'Green' }, y: { c: 'var(--wy)', n: 'Yellow' }, r: { c: 'var(--wr)', n: 'Red' } };
+const whoopZone = s => s == null ? null : s >= 67 ? 'g' : s >= 34 ? 'y' : 'r';
+const WH_TIP = {
+  r: "Red recovery — drop today's main lift to RPE 6 and cap at 2 working sets, or swap to Zone 2.",
+  y: 'Yellow — run the session as written, no top sets above RPE 7.',
+  g: 'Green — session as written.'
+};
+function whoopDay(d) { const w = S.whoop && S.whoop[d]; return w && (w.recovery || w.sleep) ? w : null; }
+const whoopZoneOn = d => { const w = whoopDay(d); return w && w.recovery ? whoopZone(w.recovery.score) : null; };
+const whoopRed = (d = isoDate()) => whoopZoneOn(d) === 'r';
+const agoTxt = ms => { const m = Math.max(0, Math.round((Date.now() - ms) / 60000)); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
+
+/* ----- fetch ----- */
+async function whoopApi(path, ms = 8000) {
+  const w = WH(), ac = new AbortController(), to = setTimeout(() => ac.abort(), ms);
+  try {
+    const r = await fetch(w.url.replace(/\/+$/, '') + path, { headers: { 'X-SPT-Key': w.key }, signal: ac.signal });
+    if (r.status === 401) throw Object.assign(new Error('key'), { code: 'key' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } finally { clearTimeout(to); }
+}
+
+/* ----- store ----- */
+function storeWhoop(days) {
+  S.whoop = S.whoop || {};
+  (days || []).forEach(d => {
+    if (!d || !/^\d{4}-\d\d-\d\d$/.test(d.date || '')) return;
+    const old = S.whoop[d.date];
+    if (old && (old.recovery || old.sleep) && !d.recovery && !d.sleep) return;   /* never replace real data with an empty day */
+    S.whoop[d.date] = d; fillCheckin(d);
+  });
+  const keep = Object.keys(S.whoop).sort().slice(-120); Object.keys(S.whoop).forEach(k => { if (!keep.includes(k)) delete S.whoop[k]; });
+  saveState();
+}
+/* prefill sleep hours + resting HR in the day's check-in; never touches values the user typed (src tag = 'whoop') */
+function fillCheckin(d) {
+  const ci = S.checkins[d.date] || {}, src = Object.assign({}, ci.src), p = {};
+  const slh = d.sleep && d.sleep.hours, hr = d.recovery && d.recovery.rhr_bpm;
+  if (slh != null && (ci.sleepH == null || src.sleepH === 'whoop')) { p.sleepH = r1(slh); src.sleepH = 'whoop'; }
+  if (hr != null && (ci.hr == null || src.hr === 'whoop')) { p.hr = Math.round(hr); src.hr = 'whoop'; }
+  if (Object.keys(p).length) S.checkins[d.date] = Object.assign({}, ci, p, { src, u: Date.now() });
+}
+
+/* ----- built-in mock generator (localStorage['spt-whoop-mock']==='1') ----- */
+function mockWhoopDays() {
+  const today = isoDate(), rnd = i => { const x = Math.sin(i * 12.9898 + 4.1) * 43758.5453; return x - Math.floor(x); };
+  let ov = null; try { ov = localStorage.getItem('spt-whoop-mock-today'); } catch (e) { }
+  const out = [];
+  for (let i = 29; i >= 0; i--) {
+    const date = addDays(today, -i), k = parseISO(date).getTime() / 864e5;
+    let rec = Math.round(Math.max(6, Math.min(98, 58 + 26 * Math.sin(k / 3.1) + (rnd(k) - .5) * 28)));
+    if (i === 0 && ov) rec = { red: 24, yellow: 52, green: 84 }[ov] || rec;
+    const hrv = r1(46 + rec * .42 + rnd(k + 1) * 6), rhr = Math.round(61 - rec * .13 + rnd(k + 2) * 3), sh = r1(Math.max(4.8, 6.1 + rec / 100 * 1.7 + (rnd(k + 3) - .5) * 1.2));
+    const perf = Math.round(Math.min(100, 66 + rec * .28 + rnd(k + 4) * 6));
+    out.push({ date, recovery: { score: rec, hrv_ms: hrv, rhr_bpm: rhr, spo2: 96.8, skin_temp_c: 33.4, state: rec >= 67 ? 'green' : rec >= 34 ? 'yellow' : 'red' },
+      sleep: { start: date + 'T23:10:00Z', end: date + 'T07:05:00Z', hours: sh, performance_pct: perf, efficiency_pct: 91, consistency_pct: 78, respiratory_rate: 15.1, stages: { light_h: r1(sh * .5), sws_h: r1(sh * .22), rem_h: r1(sh * .28), awake_h: .5 }, debt_h: .4 },
+      strain: { day_strain: r1(7 + rnd(k + 5) * 9), kilojoules: 8200, avg_hr: 66, max_hr: 168 }, workouts: [] });
+  }
+  return out;
+}
+
+/* ----- sync ----- */
+function whoopRefreshUI() {
+  const a = document.activeElement; if (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return;
+  if (['today', 'progress', 'plan', 'log'].includes(ui.tab) && !ui.sheet) render();
+}
+async function syncWhoop(force) {
+  if (whoopMock()) { storeWhoop(mockWhoopDays()); WH().last = Date.now(); saveState(); ui.whoop.offline = false; whoopRefreshUI(); return 'ok'; }
+  const w = WH(); if (!whoopOn() || ui.whoop.busy) return 'skipped';
+  if (!force && w.last && Date.now() - w.last < 15 * 60000) return 'skipped';
+  ui.whoop.busy = true; let res = 'ok';
+  try {
+    const today = isoDate(), j = !w.seeded ? await whoopApi(`/api/range?start=${addDays(today, -29)}&end=${today}`, 15000) : await whoopApi('/api/today');
+    if (j && j.connected === false) { w.connected = false; saveState(); toast('Whoop disconnected. Reconnect in Plan.', { ms: 4000 }); res = 'fail'; }
+    else if (j && (j.days || j.date)) { storeWhoop(j.days || [j]); if (j.days) w.seeded = true; w.last = Date.now(); ui.whoop.offline = false; ui.whoop.err = ''; saveState(); }
+    else throw new Error('bad response');
+  } catch (e) { ui.whoop.offline = true; ui.whoop.err = e && e.code === 'key' ? 'App key rejected' : e && e.name === 'AbortError' ? 'Timed out' : 'Worker unreachable'; res = 'fail'; }
+  ui.whoop.busy = false; whoopRefreshUI(); return res;
+}
+
+/* ----- pull to refresh on Today ----- */
+function bindPTR() {
+  const el = $('#screen'); let y0 = null, dy = 0, pt;
+  const ind = () => pt || (pt = Object.assign(document.createElement('div'), { id: 'ptr', className: 'pill' }), $('#app').appendChild(pt), pt);
+  el.addEventListener('touchstart', e => { y0 = ui.tab === 'today' && whoopOn() && el.scrollTop <= 0 && !ui.sheet && e.touches.length === 1 ? e.touches[0].clientY : null; dy = 0; }, { passive: true });
+  el.addEventListener('touchmove', e => { if (y0 == null) return; dy = e.touches[0].clientY - y0; const p = ind(); p.style.opacity = dy > 30 ? 1 : 0; p.textContent = dy > 80 ? 'Release to sync Whoop' : 'Pull to sync Whoop'; }, { passive: true });
+  el.addEventListener('touchend', async () => {
+    const go_ = y0 != null && dy > 80; y0 = null; if (pt) pt.style.opacity = 0; if (!go_) return;
+    const w = WH(); if (!whoopMock() && w.last && Date.now() - w.last < 15 * 60000) return toast('Whoop is up to date. Synced ' + agoTxt(w.last));
+    toast('Syncing Whoop…', { ms: 1200 }); await syncWhoop(true);
+  });
+}
+
+/* ----- Today: recovery card ----- */
+function recoveryCard(date) {
+  if (!whoopOn()) return '';
+  const d = whoopDay(date), off = ui.whoop.offline && !whoopMock(), chip = off ? '<span class="pill o" role="status">Whoop: offline</span>' : '';
+  if (!d || !d.recovery || d.recovery.score == null) return `<div class="card pad whwait"><div class="grow"><b>Whoop</b><div class="s muted" style="font-size:14px">${d && d.sleep ? 'Sleep synced. Recovery is not scored yet.' : 'No recovery for today yet.'}</div></div>${chip}</div>`;
+  const r = d.recovery, z = whoopZone(r.score), c = WZ[z].c, sl = d.sleep || {}, y = S.whoop[addDays(date, -1)], ys = y && y.strain ? y.strain.day_strain : null, circ = 2 * Math.PI * 30;
+  const st = (v, u, l) => `<div class="kv"><b>${v}<small>${u}</small></b><span>${l}</span></div>`;
+  return `<div class="card pad whc" style="--wz:${c}"><div class="wh-top"><svg class="ring" viewBox="0 0 72 72" role="img" aria-label="Recovery ${r.score} percent, ${WZ[z].n}"><circle cx="36" cy="36" r="30" class="rt"/><circle cx="36" cy="36" r="30" class="rv" stroke-dasharray="${(circ * r.score / 100).toFixed(1)} ${circ.toFixed(1)}" transform="rotate(-90 36 36)"/><text x="36" y="43" text-anchor="middle">${r.score}%</text></svg><div class="grow"><div class="t" style="font-weight:700;font-size:19px">Recovery <span style="color:var(--wz)">${WZ[z].n}</span></div><div class="s muted" style="font-size:13px">Whoop · ${fmtDate(date, { weekday: 'short', day: 'numeric', month: 'short' })}</div>${chip}</div></div><div class="wh-g">${st(r.hrv_ms != null ? Math.round(r.hrv_ms) : '–', ' ms', 'HRV')}${st(r.rhr_bpm ?? '–', ' bpm', 'Resting HR')}${st(sl.hours != null ? fmtN(sl.hours) : '–', ' h', sl.performance_pct != null ? 'Sleep · ' + sl.performance_pct + '%' : 'Sleep')}${st(ys != null ? fmtN(ys) : '–', '', 'Strain yesterday')}</div><div class="wh-tip">${esc(WH_TIP[z])}</div></div>`;
+}
+const wzCls = date => { const z = whoopZoneOn(date); return z ? ' wz-' + z : ''; };
+const recChip = date => { const w = whoopDay(date); if (!w || !w.recovery || w.recovery.score == null) return ''; const z = whoopZone(w.recovery.score); return ` <span class="pill wchip" style="--wz:${WZ[z].c}">Recovery ${w.recovery.score}%</span>`; };
+
+/* ----- Plan: Whoop card ----- */
+function whoopSettingsHTML() {
+  const w = WH(), mock = whoopMock(), on = whoopOn();
+  const status = mock ? 'Test mode: built-in sample data' : w.connected ? `Connected${w.since ? ' since ' + fmtShort(isoDate(new Date(w.since))) : ''} · ${w.last ? 'synced ' + agoTxt(w.last) : 'not synced yet'}` : 'Not connected';
+  return `<div class="sec">Whoop</div><div class="card pad"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="pill ${on ? 'g' : ''}" id="whstat">${esc(status)}</span>${ui.whoop.offline && !mock ? `<span class="pill o">Whoop: offline${ui.whoop.err ? ' · ' + esc(ui.whoop.err) : ''}</span>` : ''}</div><div class="lbl">Worker URL</div><input type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" data-in="whurl" placeholder="https://spt-whoop.yourname.workers.dev" value="${esc(w.url)}" aria-label="Worker URL"><div class="lbl">App key</div><input type="password" autocomplete="off" autocapitalize="off" spellcheck="false" data-in="whkey" placeholder="The APP_SECRET you set on the Worker" value="${esc(w.key)}" aria-label="App key"><div style="display:grid;gap:8px;margin-top:14px"><button class="btn pri" data-action="whconnect">${w.connected ? 'Reconnect Whoop' : 'Connect Whoop'}</button>${w.connected || on ? `<div class="two"><button class="btn" data-action="whsync">Sync now</button><button class="btn danger" data-action="whdisconnect">Disconnect</button></div>` : ''}</div></div>`;
+}
+inputs.whurl = el => debounced('whurl', () => { WH().url = el.value.trim().replace(/\/+$/, ''); saveState(); });
+inputs.whkey = el => debounced('whkey', () => { WH().key = el.value.trim(); saveState(); });
+function readWhoopFields() {
+  const u = $('[data-in=whurl]'), k = $('[data-in=whkey]'); if (u) WH().url = u.value.trim().replace(/\/+$/, ''); if (k) WH().key = k.value.trim(); saveState();
+  return WH().url && WH().key && /^https:\/\/|^http:\/\/localhost/.test(WH().url);
+}
+actions.whconnect = async () => {
+  if (!readWhoopFields()) return toast('Enter the Worker URL (https://…) and the app key first', { ms: 3500 });
+  try {
+    const st = await whoopApi('/api/status');
+    if (st.connected) { WH().connected = true; WH().since = WH().since || st.since || new Date().toISOString(); WH().seeded = false; saveState(); toast('Whoop already connected'); await syncWhoop(true); return render(); }
+    const l = await whoopApi('/auth/link'); if (!l || !/^https?:\/\//.test(l.url || '')) throw new Error('bad link');
+    location.href = l.url;
+  } catch (e) { toast(e && e.code === 'key' ? 'The Worker rejected the app key' : 'Could not reach the Worker. Check the URL.', { ms: 4000 }); }
+};
+actions.whsync = async () => { toast('Syncing Whoop…', { ms: 1200 }); const r = await syncWhoop(true); toast(r === 'ok' ? 'Whoop synced' : 'Whoop: offline', { ms: 2000 }); };
+actions.whdisconnect = async () => {
+  const w = WH(); let remote = true;
+  try { if (w.url && w.key) { const r = await fetch(w.url.replace(/\/+$/, '') + '/auth/disconnect', { method: 'POST', headers: { 'X-SPT-Key': w.key } }); remote = r.ok; } } catch (e) { remote = false; }
+  w.connected = false; w.seeded = false; w.last = 0; w.since = ''; ui.whoop.offline = false; saveState(); render();
+  toast(remote ? 'Whoop disconnected. Synced history stays on this device.' : 'Disconnected here. The Worker could not be reached, so it may still hold the tokens.', { ms: 4500 });
+};
+
+/* ----- OAuth return: ?whoop=connected ----- */
+function handleWhoopReturn() {
+  let p; try { p = new URLSearchParams(location.search); } catch (e) { return; }
+  const v = p.get('whoop'); if (!v) return;
+  const reason = p.get('reason'); p.delete('whoop'); p.delete('reason');
+  try { history.replaceState(null, '', location.pathname + (p.toString() ? '?' + p : '') + location.hash); } catch (e) { }
+  if (v === 'connected') { const w = WH(); w.connected = true; w.since = new Date().toISOString(); w.seeded = false; w.last = 0; saveState(); toast('Whoop connected'); syncWhoop(true); }
+  else toast('Whoop connection failed' + (reason ? ' (' + reason + ')' : ''), { ms: 4500 });
+}
+
+/* ----- Progress ----- */
+function whoopRange(today, n) { const a = []; for (let i = n - 1; i >= 0; i--) { const d = addDays(today, -i); a.push([d, whoopDay(d)]); } return a; }
+function whoopCharts(today) {
+  if (!whoopOn() && !Object.keys(S.whoop || {}).length) return '';
+  const days = whoopRange(today, 30), last = days.length - 1, xt = [[0, fmtShort(days[0][0])], [last, 'Today']];
+  const rec = [], hrv = [], dm = [];
+  days.forEach(([d, w], i) => { if (w && w.recovery && w.recovery.score != null) rec.push([i, w.recovery.score]); if (w && w.recovery && w.recovery.hrv_ms != null) hrv.push([i, w.recovery.hrv_ms]); const c = S.checkins[d]; if (c && c.doms != null) dm.push([i, c.doms]); });
+  const none = 'Connect Whoop in Plan to see this.';
+  const bars = rec.map(p => [p[0], p[1], WZ[whoopZone(p[1])].c]);
+  let h = chartCard('Recovery', 'last 30 days, %', rec.length ? chartSVG({ label: 'Recovery percent, 30 days', series: [{ pts: rec, color: 'transparent', nodots: true }], bars, yr: [0, 100], xmin: 0, xmax: last, xt, legend: [['Green 67+', 'var(--wg)'], ['Yellow 34–66', 'var(--wy)'], ['Red 0–33', 'var(--wr)']] }) : '', none);
+  const ma = hrv.map((p, i) => { const sl = hrv.filter(q => q[0] > p[0] - 7 && q[0] <= p[0]); return [p[0], sl.reduce((a, b) => a + b[1], 0) / sl.length]; });
+  h += chartCard('HRV', 'ms, 7-day average', hrv.length > 1 ? chartSVG({ label: 'HRV, 30 days', series: [{ pts: hrv, color: 'var(--ink3)', r: 2.2, w: 1.2 }, { pts: ma, color: 'var(--g2)', nodots: true, w: 2.6 }], xmin: 0, xmax: last, xt, legend: [['Daily', 'var(--ink3)'], ['7-day average', 'var(--g2)']] }) : '', none);
+  h += chartCard('Recovery vs soreness', 'last 30 days', rec.length > 1 && dm.length > 1 ? chartSVG({ label: 'Recovery vs soreness', y2: true, yr: [0, 100], yr2: [0, 12], xmin: 0, xmax: last, xt, series: [{ pts: rec, color: 'var(--g2)', r: 2.4 }, { pts: dm, color: 'var(--o)', axis: 2, r: 2.4 }], legend: [['Recovery % (left)', 'var(--g2)'], ['Soreness 0–10 (right)', 'var(--o)']] }) : '', rec.length > 1 ? 'Log soreness for a few days to compare it with recovery.' : none);
+  return h;
+}
+function whoopWeek(ws, we) {
+  const v = []; for (let d = ws; d <= we; d = addDays(d, 1)) { const w = whoopDay(d); if (w && w.recovery) v.push(w.recovery); }
+  if (!v.length) return '';
+  const avg = k => { const a = v.map(x => x[k]).filter(x => x != null); return a.length ? Math.round(a.reduce((p, q) => p + q, 0) / a.length) : '–'; };
+  return `<div class="s" style="font-size:13px;color:var(--ink2)">Recovery ${avg('score')}% · HRV ${avg('hrv_ms')} ms</div>`;
+}
 /* ===== boot ===== */
 function boot() {
-  applyTheme(); renderNav(); bindEvents(); render(false); registerSW();
+  applyTheme(); renderNav(); bindEvents(); bindPTR(); render(false); registerSW();
+  handleWhoopReturn(); syncWhoop();
   window.addEventListener('pageshow', () => { if (ui.tab === 'today') render(); });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && ui.tab === 'today') render(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) return; if (ui.tab === 'today') render(); syncWhoop(); });
   window.addEventListener('error', e => console.error('Uncaught', e.message));
 }
 document.addEventListener('DOMContentLoaded', boot);

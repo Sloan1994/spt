@@ -1,0 +1,13 @@
+name = "spt-whoop"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+ALLOWED_ORIGIN = "https://sloan1994.github.io"
+# WHOOP_API_BASE = "https://api.prod.whoop.com"   # default; test/run.sh overrides this to point at the mock
+
+[[kv_namespaces]]
+binding = "TOKENS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"   # npx wrangler kv namespace create TOKENS
+
+# Secrets (never put these in this file): WHOOP_CLIENT_ID, WHOOP_CLIENT_SECRET, APP_SECRET
