@@ -1,5 +1,11 @@
 /* ===== SPT v2.2 premium (additive; hooks are one-liners in other files) ===== */
 const CHANGELOG = {
+  '2.3.1': [
+    'Swaps now change the whole exercise: its own reps, load type, rest, cues and suggested weight. Today and Plan show the swap too.',
+    'Swapping after logging sets keeps those sets and adds the new exercise below.',
+    'Rest timer: 3-2-1 pips, a loud finish beep over your music, reminders at +15 s and +30 s, and an overtime count.',
+    'The screen stays on during a rest so the beep fires. Test it in Plan > Feedback.'
+  ],
   '2.3.0': [
     'Training load: lifts, conditioning, lanes and Whoop strain become one daily load, with a load ratio (ACWR) and charts in Progress.',
     'Today gets Load and Readiness tiles. If the planned session would push you past 1.3, Apply trim marks accessory sets optional.',
@@ -50,17 +56,39 @@ function haptic(kind) {
 }
 function audioInit() {
   try {
-    if (!pctx) { pctx = new (window.AudioContext || window.webkitAudioContext)(); try { if (navigator.audioSession) navigator.audioSession.type = 'ambient'; } catch (e) { } }
-    if (pctx.state === 'suspended') pctx.resume();
+    /* 'transient' = short alert sounds: plays over music (ducking it briefly) instead of the mixable-but-mutable 'ambient' channel */
+    if (!pctx) { pctx = new (window.AudioContext || window.webkitAudioContext)(); try { if (navigator.audioSession) navigator.audioSession.type = 'transient'; } catch (e) { } }
+    if (pctx.state !== 'running') pctx.resume();
   } catch (e) { }
 }
 ['pointerdown', 'touchend', 'click'].forEach(t => document.addEventListener(t, audioInit, { capture: true, passive: true }));
+function tone(f, at, dur, gain = .5, type = 'triangle') {
+  const t = pctx.currentTime + at, o = pctx.createOscillator(), g = pctx.createGain();
+  o.type = type; o.frequency.value = f;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + .012); g.gain.setValueAtTime(gain, t + dur - .04); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  o.connect(g); g.connect(pctx.destination); o.start(t); o.stop(t + dur + .02);
+}
+const soundOn = () => S.settings.sound !== false && (audioInit(), !!pctx);
+/* 3-2-1 countdown pips: short, same pitch, so the finish stands out */
+function restPip(n) { if (!soundOn()) return; tone(n === 1 ? 1046.5 : 880, 0, .09, .4); }
+/* finish: three rising beeps, loud enough for a gym floor */
 function chime() {
-  if (S.settings.sound === false) return; audioInit(); if (!pctx) return;
-  const t = pctx.currentTime;
-  [[880, 0], [1318.5, .17]].forEach(([f, d]) => { const o = pctx.createOscillator(), g = pctx.createGain(); o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t + d); g.gain.exponentialRampToValueAtTime(.22, t + d + .015); g.gain.exponentialRampToValueAtTime(.0001, t + d + .4); o.connect(g); g.connect(pctx.destination); o.start(t + d); o.stop(t + d + .45); });
+  if (!soundOn()) return;
+  [[1046.5, 0], [1318.5, .2], [1568, .4]].forEach(([f, d]) => { tone(f, d, .17, .7); tone(f * 2, d, .17, .12, 'sine'); });
 }
 function restDone() { haptic('timer'); chime(); }
+function restRemind() { haptic('timer'); chime(); }
+actions.testbeep = () => { audioInit(); restPip(3); setTimeout(() => restPip(2), 700); setTimeout(() => restPip(1), 1400); setTimeout(chime, 2100); };
+
+/* keep the screen awake only while a rest is running. iOS freezes web apps when the screen locks, which would kill the beep */
+let wakeL = null;
+async function restWake(on) {
+  try {
+    if (!on || S.settings.restWake === false || !('wakeLock' in navigator)) { if (wakeL) { const w = wakeL; wakeL = null; await w.release(); } return; }
+    if (!wakeL && !document.hidden) { wakeL = await navigator.wakeLock.request('screen'); wakeL.addEventListener('release', () => { wakeL = null; }); }
+  } catch (e) { wakeL = null; }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && ui.rest) { restWake(true); updateTick(); } });
 
 /* ----- what's new ----- */
 function showWhatsNew(next) {
@@ -430,10 +458,10 @@ const DRV = { tok: null, exp: 0, busy: false }, DAPI = 'https://www.googleapis.c
 function premiumSettingsHTML() {
   PX(); const d = S.drive, st = S.settings, tg = (k, l, s, on) => `<button class="row ${on ? 'on' : ''}" data-action="premtoggle" data-k="${k}" role="switch" aria-checked="${on}">${checkIco}<div class="grow"><div class="t">${l}</div><div class="s">${s}</div></div></button>`;
   const last = d.lastBackup ? fmtDate(isoDate(new Date(d.lastBackup)), { day: 'numeric', month: 'short' }) + ', ' + new Date(d.lastBackup).toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit' }) : 'never';
-  return `<div class="sec">Feedback</div><div class="card">${tg('haptics', 'Haptics', 'Taps on set confirm, timer end and finish', st.haptics !== false)}${tg('sound', 'Rest timer chime', 'Two soft tones. Plays alongside your music', st.sound !== false)}</div>
+  return `<div class="sec">Feedback</div><div class="card">${tg('haptics', 'Haptics', 'Taps on set confirm, timer end and finish', st.haptics !== false)}${tg('sound', 'Rest timer beeps', '3-2-1 pips and a loud finish. Plays over your music', st.sound !== false)}${tg('restWake', 'Keep screen on during rest', 'Stops the phone locking mid-rest so the beep fires. Releases when the rest ends', st.restWake !== false)}<button class="row" data-action="testbeep"><div class="grow"><div class="t">Test the beep</div><div class="s">Try it with your music playing and the silent switch on</div></div>${chev}</button></div>
 <div class="sec">Backup to Google Drive</div><div class="card pad"><div style="display:flex;gap:8px;flex-wrap:wrap"><span class="pill ${d.connected ? 'g' : ''}">${d.connected ? 'Connected' : 'Not connected'}</span><span class="pill">Last backup: ${last}</span>${d.err ? `<span class="pill o">${esc(d.err)}</span>` : ''}</div><div class="lbl">OAuth client ID</div><input data-in="drvid" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="123456-abc.apps.googleusercontent.com" value="${esc(d.clientId || '')}" aria-label="Google OAuth client ID"><div style="display:grid;gap:8px;margin-top:14px">${d.connected ? `<button class="btn pri" data-action="drivebackup">Back up now</button><button class="btn" data-action="driverestore">Restore from latest</button><button class="btn ghost danger" data-action="drivedisc">Disconnect</button>` : '<button class="btn pri" data-action="driveconnect">Connect Google Drive</button>'}</div><p class="muted" style="font-size:13px;margin:10px 0 0">Saves a JSON file to a Drive folder called SPT Backups. Needs a Web OAuth client ID; steps are in the README.</p></div>`;
 }
-actions.premtoggle = el => { const k = el.dataset.k; S.settings[k] = S.settings[k] === false; saveState(); if (S.settings[k] !== false) { if (k === 'sound') chime(); else haptic('tick'); } render(); };
+actions.premtoggle = el => { const k = el.dataset.k; S.settings[k] = S.settings[k] === false; saveState(); if (k === 'restWake') restWake(!!ui.rest); if (S.settings[k] !== false) { if (k === 'sound') chime(); else haptic('tick'); } render(); };
 inputs.drvid = el => debounced('drvid', () => { PX().drive.clientId = el.value.trim(); saveState(); });
 function loadGIS() { return window.google && google.accounts && google.accounts.oauth2 ? Promise.resolve() : (DRV.p = DRV.p || new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true; s.onload = res; s.onerror = () => { DRV.p = null; rej(new Error('offline')); }; document.head.appendChild(s); })); }
 function driveToken(prompt) {

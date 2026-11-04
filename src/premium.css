@@ -50,3 +50,10 @@ a.btn{text-decoration:none;color:var(--ink)}
 .rc-tm{font-weight:500;font-size:13px;color:#A3B5AB;margin-top:6px;padding-top:10px}
 .wnv{margin:14px 0 4px;font-weight:600}.wnv:first-child{margin-top:0}
 .card+.hl{margin-top:14px}
+
+/* rest timer: last 3 s and overtime */
+.restin.last .tm{color:var(--o)}
+.restin.done{border-color:var(--o);animation:rpulse 1s ease-in-out 4}
+.restin.done .bar i{background:var(--o)}
+@keyframes rpulse{0%,100%{box-shadow:0 8px 28px rgba(0,0,0,.4)}50%{box-shadow:0 0 0 4px var(--osoft),0 8px 28px rgba(0,0,0,.4)}}
+@media (prefers-reduced-motion:reduce){.restin.done{animation:none}}

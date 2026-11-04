@@ -4,7 +4,7 @@ const srcWithout = (d, k) => { const s = Object.assign({}, getCI(d).src); delete
 function setCI(d, patch) { S.checkins[d] = Object.assign({}, S.checkins[d], patch, { u: Date.now() }); saveState(); }
 const exLink = (n, cls = '') => `<button class="${cls}" data-action="exhist" data-ex="${esc(n)}">${esc(n)}</button>`;
 function prescList(key, wk) {
-  return DAYS[key].map((_, i) => presc(key, wk, i));
+  return DAYS[key].map((_, i) => slotPresc(key, wk, i));
 }
 
 /* ===== TODAY ===== */

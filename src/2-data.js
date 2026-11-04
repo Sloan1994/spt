@@ -74,10 +74,53 @@ const LIB = {
 };
 const MAIN_LIFTS = ['Trap bar deadlift', 'Leg press', 'DB bench press', 'Chest-supported row', 'Lat pulldown'];
 
+/* ===== per-exercise prescription profile, used when an exercise is swapped in =====
+ * t: load type ('rpe' = pick the weight by feel, 'bw' = bodyweight (+kg), 'time', 'distance')
+ * reps: per week [w1, w2, w3, w4 deload]; sets always come from the slot so weekly volume and deloads are kept. */
+const S_ = (t, reps, rest, o = {}) => Object.assign({ t, reps, rest }, o);
+const SPEC = {
+  'Trap bar deadlift': S_('rpe', [5, 5, 5, 5], 180), 'DB reverse lunge': S_('rpe', [8, 8, 10, 8], 90, { per: '/leg' }), 'DB step-up': S_('rpe', [8, 8, 10, 8], 90, { per: '/leg' }),
+  'Leg press': S_('rpe', [10, 10, 12, 10], 90), 'Sled push': S_('rpe', [20, 20, 20, 20], 90, { per: 'm', note: '20 m per set.' }), 'Goblet squat': S_('rpe', [10, 10, 12, 10], 90),
+  'Romanian deadlift': S_('rpe', [8, 8, 10, 8], 120), 'Bulgarian split squat': S_('rpe', [8, 8, 10, 8], 90, { per: '/leg' }), 'Hip thrust': S_('rpe', [10, 10, 12, 10], 90),
+  'Walking lunge': S_('rpe', [10, 10, 12, 10], 90, { per: '/leg' }),
+  'DB bench press': S_('rpe', [8, 8, 8, 8], 120), 'Chest-supported row': S_('rpe', [10, 10, 10, 10], 90), 'Half-kneeling landmine press': S_('rpe', [8, 8, 10, 8], 90, { per: '/side' }),
+  'Lat pulldown': S_('rpe', [10, 10, 12, 10], 90), 'Assisted pull-up': S_('rpe', [8, 8, 10, 8], 90), 'Face pull': S_('rpe', [15, 15, 20, 15], 60), 'Incline DB press': S_('rpe', [8, 8, 10, 8], 120),
+  'Single-arm cable row': S_('rpe', [10, 10, 12, 10], 90, { per: '/side' }), 'Seated DB shoulder press': S_('rpe', [8, 8, 10, 8], 90),
+  'Pallof press': S_('rpe', [10, 12, 12, 10], 60, { per: '/side' }), 'Side plank': S_('time', [30, 40, 45, 30], 60, { per: 's/side' }),
+  'Standing anti-rotation hold': S_('time', [20, 25, 30, 20], 60, { per: 's/side' }), 'Dead bug': S_('bw', [8, 10, 10, 8], 60, { per: '/side' }),
+  'Suitcase carry': S_('rpe', [30, 30, 30, 30], 90, { per: 'm', perKg: '/side', note: '30 m per side.' }), 'Cable chop': S_('rpe', [10, 12, 12, 10], 60, { per: '/side' }),
+  "Farmer's carry": S_('rpe', [30, 30, 30, 30], 90, { per: 'm', perKg: '/hand', note: '30 m per set.' }), 'Plate pinch hold': S_('time', [20, 25, 30, 20], 60, { per: 's/hand' }),
+  'Dead hang': S_('time', [30, 40, 45, 30], 60, { per: 's' }), 'Wrist roller': S_('time', [30, 40, 45, 30], 60, { per: 's' }), 'Towel pull-up hold': S_('time', [15, 20, 25, 15], 90, { per: 's' }),
+  'SkiErg': S_('distance', [250, 250, 250, 250], 60, { per: 'm', note: '1:1 work to rest.' }), 'Rower': S_('distance', [250, 250, 250, 250], 60, { per: 'm', note: '1:1 work to rest.' }),
+  'Assault bike': S_('time', [45, 45, 60, 45], 60, { per: 's', note: '1:1 work to rest.' }), 'Sled pull': S_('rpe', [20, 20, 20, 20], 90, { per: 'm', note: '20 m per set.' }),
+  'Burpee broad jump': S_('bw', [5, 5, 6, 5], 90)
+};
+/* anything not in the table (e.g. hotel-gym variants) gets a sensible guess from its name */
+function specFor(n) {
+  if (SPEC[n]) return SPEC[n];
+  if (/treadmill|interval|sprint|boxing|march|bike/i.test(n)) return S_('time', [45, 45, 60, 45], 60, { per: 's' });
+  if (/hold|hang|plank/i.test(n)) return S_('time', [30, 40, 45, 30], 60, { per: 's' });
+  if (/carry|walk/i.test(n)) return S_('rpe', [30, 30, 30, 30], 90, { per: 'm' });
+  if (/push-up|pike|jump/i.test(n)) return S_('bw', [8, 10, 12, 8], 90);
+  return S_('rpe', [10, 10, 12, 10], 90);
+}
+const libGroup = n => Object.keys(LIB).find(k => LIB[k].includes(n));
+/* the slot's prescription re-shaped for exercise `nm`: its own reps, load type, rest and notes; the slot's sets, RPE and week kept */
+function adaptPresc(p, nm) {
+  if (!nm || nm === p.name) return p;
+  const sp = specFor(nm), wi = p.deload ? 3 : Math.max(0, Math.min(3, (p.wk || 1) - 1));
+  return Object.assign({}, p, {
+    name: nm, base: p.name, reps: sp.reps[wi], per: sp.per || '', perKg: sp.perKg || '', load: { type: sp.t, value: null },
+    rest: sp.rest, note: sp.note || '', alt: '', swapGroup: libGroup(nm) || p.swapGroup
+  });
+}
+/* what a slot actually prescribes, with the block's swaps applied. Use this for anything shown or logged. */
+function slotPresc(key, wk, i) { const p = presc(key, wk, i); return adaptPresc(p, (S.swaps[BLOCK.id] || {})[p.name]); }
+
 function presc(key, wk, i) {
   const x = DAYS[key][i], w = x.w[wk - 1];
   return {
-    name: x.name, sets: w[0], reps: w[1], per: x.per || '', perKg: x.perKg || '', load: { type: x.type, value: w[2] != null ? w[2] : null },
+    name: x.name, wk, sets: w[0], reps: w[1], per: x.per || '', perKg: x.perKg || '', load: { type: x.type, value: w[2] != null ? w[2] : null },
     rpeTarget: x.rpe[wk - 1], rest: x.rest, note: x.note || '', swapGroup: x.swapGroup, alt: x.alt || '', main: !!x.main, optional: !!(x.optWk1 && wk === 1)
   };
 }
@@ -113,10 +156,8 @@ function ensureSession(slot) {
   const s = { id, slot: slot.id, date: slot.date, key: slot.key, week: slot.w, status: 'draft', start: Date.now(), end: null, note: '', ex: [], rounds: [], u: Date.now() };
   if (slot.key === 'A' || slot.key === 'B') {
     s.ex = DAYS[slot.key].map((x, i) => {
-      const p = presc(slot.key, slot.w, i), nm = (S.swaps[BLOCK.id] || {})[p.name] || p.name;
-      const sg = suggestLoad(nm, p), sets = [];
-      for (let k = 0; k < p.sets; k++) sets.push({ w: sg.kg, r: p.reps, rpe: p.rpeTarget, done: false });
-      return { name: nm, orig: p.name, tgt: p, sets, note: '', skipped: p.optional };
+      const p = slotPresc(slot.key, slot.w, i);
+      return { name: p.name, orig: x.name, bi: i, tgt: p, sets: freshSets(p), note: '', skipped: p.optional };
     });
   } else if (slot.key === 'C') s.rounds = Array.from({ length: DAY_C.rounds[slot.w - 1] }, () => null);
   S.sessions[id] = s; saveState();
@@ -164,6 +205,27 @@ function sessionStats(s) {
   return { sets, ton: Math.round(ton), dur: s.start ? ((s.end || Date.now()) - s.start) / 1000 : 0, rounds: (s.rounds || []).filter(Boolean).length };
 }
 const swapsFor = orig => (S.swaps[BLOCK.id] || {})[orig];
+/* n un-logged sets for prescription p, pre-filled with the suggested load */
+function freshSets(p, n = p.sets, date) {
+  const sg = suggestLoad(p.name, p, date), out = [];
+  for (let k = 0; k < n; k++) out.push({ w: sg.kg, r: p.reps, rpe: p.rpeTarget, done: false });
+  return out;
+}
+/* base (unswapped) prescription for a session exercise */
+function basePrescFor(s, e) {
+  const i = e.bi != null ? e.bi : DAYS[s.key].findIndex(x => x.name === e.orig);
+  return i >= 0 ? presc(s.key, s.week, i) : (e.tgt.base ? Object.assign({}, e.tgt, { name: e.tgt.base }) : e.tgt);
+}
+/* one-time repair: drafts made before swaps changed the prescription still carry the original exercise's targets */
+function repairSwappedDrafts() {
+  let ch = false;
+  Object.values(S.sessions).forEach(s => (s.ex || []).forEach(e => {
+    if (s.status === 'done' || e.name === e.orig || (e.tgt && e.tgt.name === e.name)) return;
+    const t = adaptPresc(basePrescFor(s, e), e.name), left = e.sets.filter(x => !x.done).length;
+    e.tgt = t; e.sets = e.sets.filter(x => x.done).concat(freshSets(t, left, s.date)); ch = true;
+  }));
+  if (ch) saveState();
+}
 
 /* ===== supplements for a day ===== */
 function suppsFor(date, key) {

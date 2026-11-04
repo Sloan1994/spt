@@ -1,6 +1,6 @@
 /* ===== boot ===== */
 function boot() {
-  applyTheme(); renderNav(); bindEvents(); bindPTR(); render(false); registerSW();
+  repairSwappedDrafts(); applyTheme(); renderNav(); bindEvents(); bindPTR(); render(false); registerSW();
   handleWhoopReturn(); syncWhoop();
   window.addEventListener('pageshow', () => { if (ui.tab === 'today') render(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) return; if (ui.tab === 'today') render(); syncWhoop(); });

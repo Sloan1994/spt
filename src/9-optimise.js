@@ -88,9 +88,8 @@ function optSyncLoad() {   /* mirror the derived daily load into S.load[date] = 
 /* planned session for a day (real draft if present, else a pseudo session built from the prescription) */
 function optPseudo(slot) {
   return { key: slot.key, rounds: [], ex: DAYS[slot.key].map((x, i) => {
-    const p = presc(slot.key, slot.w, i), nm = (S.swaps[BLOCK.id] || {})[p.name] || p.name, sg = suggestLoad(nm, p, slot.date), sets = [];
-    for (let k = 0; k < p.sets; k++) sets.push({ w: sg.kg, r: p.reps, rpe: p.rpeTarget, done: false });
-    return { name: nm, orig: p.name, tgt: p, sets, skipped: p.optional };
+    const p = slotPresc(slot.key, slot.w, i);
+    return { name: p.name, orig: x.name, bi: i, tgt: p, sets: freshSets(p, p.sets, slot.date), skipped: p.optional };
   }) };
 }
 function optPlan(date) {
@@ -416,7 +415,7 @@ exHeadHTML = function (s, ei) {
   const e = s.ex[ei], v = optHotelVariant(e.name, e.tgt && e.tgt.pattern, t.equip); if (!v || e.name === v) return h;
   return h.replace(/<\/div><span class="pill/, `<button class="o-hotel" data-action="opthotel" data-ex="${ei}" data-v="${esc(v)}">Hotel gym: ${esc(v)}. Tap to use</button></div><span class="pill`);
 };
-actions.opthotel = el => { const e = curSess.ex[+el.dataset.ex]; e.hotel = e.name; e.name = el.dataset.v; e.sets.forEach(x => { if (!x.done) x.w = null; }); saveSess(); render(); toast('Swapped for this session only'); };
+actions.opthotel = el => { const s = curSess, e = s.ex[+el.dataset.ex], v = el.dataset.v, t = adaptPresc(Object.assign({}, e.tgt, { name: e.name }), v), left = e.sets.filter(x => !x.done).length; e.hotel = e.name; e.hotelTgt = e.tgt; e.name = v; e.tgt = t; e.sets = e.sets.filter(x => x.done).concat(freshSets(t, left, recDate(s))); saveSess(); render(); toast('Swapped for this session only · ' + prescText(t)); };
 const _optRounds = roundsHTML;
 roundsHTML = function (s, slot) {
   const h = _optRounds(s, slot), t = optActiveTrip(s.date || isoDate()); if (!t || !optAway(t, s.date || isoDate())) return h;

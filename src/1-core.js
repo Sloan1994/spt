@@ -1,6 +1,6 @@
 'use strict';
 /* ===== SPT v2 — core ===== */
-const APP_VERSION = '2.3.0', STATE_KEY = 'spt-v2', OLD_KEY = 'training-app-v1';
+const APP_VERSION = '2.3.1', STATE_KEY = 'spt-v2', OLD_KEY = 'training-app-v1';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -177,22 +177,26 @@ actions.reload = () => { if (swReg && swReg.waiting) swReg.waiting.postMessage('
 function updateTick() {
   const now = Date.now();
   if (ui.rest) {
-    const left = Math.ceil((ui.rest.end - now) / 1000), rb = $('#restbar');
-    if (left <= 0 && !ui.rest.fired) { ui.rest.fired = true; restDone(); }
+    const R = ui.rest, left = Math.ceil((R.end - now) / 1000), over = Math.floor((now - R.end) / 1000), rb = $('#restbar');
+    /* 3-2-1 pips, then the finish alert; if it's missed, remind at +15 s and +30 s */
+    if (left > 0 && left <= 3 && !R.pips[left] && !document.hidden) { R.pips[left] = 1; if (typeof restPip === 'function') restPip(left); }
+    if (left <= 0 && !R.fired) { R.fired = true; restDone(); }
+    if (R.fired && over >= 15 * (R.rep + 1) && R.rep < 2 && !document.hidden) { R.rep++; if (typeof restRemind === 'function') restRemind(); }
     if (rb) {
-      if (!rb.classList.contains('show') || rb.dataset.k !== String(ui.rest.id)) { rb.dataset.k = ui.rest.id; rb.classList.add('show'); rb.innerHTML = `<div class="restin"><button class="tm" data-action="restadd" aria-label="Add 30 seconds"><small>Rest · tap for +30s</small><span id="rt"></span></button><button class="btn sm ghost" data-action="restadd">+30s</button><button class="ib" data-action="restoff" aria-label="Dismiss rest timer">${ico('x')}</button><div class="bar"><i id="rbar"></i></div></div>`; }
-      const t = $('#rt'), bar = $('#rbar'), box = $('.restin', rb);
-      if (t) t.textContent = left > 0 ? fmtDur(left) : 'Go';
-      if (bar) bar.style.width = Math.max(0, Math.min(100, left / ui.rest.total * 100)) + '%';
-      if (box) box.classList.toggle('done', left <= 0);
+      if (!rb.classList.contains('show') || rb.dataset.k !== String(R.id)) { rb.dataset.k = R.id; rb.classList.add('show'); rb.innerHTML = `<div class="restin"><button class="tm" data-action="restadd" aria-label="Add 30 seconds"><small id="rlbl">Rest · tap for +30s</small><span id="rt"></span></button><button class="btn sm ghost" data-action="restadd">+30s</button><button class="ib" data-action="restoff" aria-label="Dismiss rest timer">${ico('x')}</button><div class="bar"><i id="rbar"></i></div></div>`; }
+      const t = $('#rt'), bar = $('#rbar'), box = $('.restin', rb), lb = $('#rlbl');
+      if (t) t.textContent = left > 0 ? fmtDur(left) : '+' + fmtDur(Math.max(0, over));
+      if (lb) lb.textContent = left > 0 ? 'Rest · tap for +30s' : 'Rest over · next set';
+      if (bar) bar.style.width = Math.max(0, Math.min(100, left / R.total * 100)) + '%';
+      if (box) { box.classList.toggle('done', left <= 0); box.classList.toggle('last', left > 0 && left <= 3); }
     }
-    if (left < -8) actions.restoff();
+    if (over > 180) actions.restoff();
   }
   const el = $('#sesstime'); if (el && ui.trainSess) { const s = ui.trainSess(); if (s && s.start) el.textContent = fmtDur(((s.end || now) - s.start) / 1000); }
   const sw = $('#swtime'); if (sw && ui.sw) sw.textContent = fmtDur(swElapsed() / 1000).replace(/^(\d+:\d\d)$/, '$1');
 }
 setInterval(updateTick, 250);
-function startRest(sec) { document.body.classList.add('resting'); ui.rest = { id: uid(), end: Date.now() + sec * 1000, total: sec, fired: false }; updateTick(); }
-actions.restadd = () => { if (!ui.rest) return; ui.rest.end += 30000; ui.rest.total += 30; ui.rest.fired = false; vib(8); updateTick(); };
-actions.restoff = () => { ui.rest = null; document.body.classList.remove('resting'); const rb = $('#restbar'); rb.classList.remove('show'); rb.innerHTML = ''; delete rb.dataset.k; };
+function startRest(sec) { document.body.classList.add('resting'); ui.rest = { id: uid(), end: Date.now() + sec * 1000, total: sec, fired: false, pips: {}, rep: 0 }; if (typeof restWake === 'function') restWake(true); updateTick(); }
+actions.restadd = () => { const R = ui.rest; if (!R) return; if (R.fired) { R.end = Date.now() + 30000; R.total = 30; } else { R.end += 30000; R.total += 30; } R.fired = false; R.pips = {}; R.rep = 0; vib(8); if (typeof restWake === 'function') restWake(true); updateTick(); };
+actions.restoff = () => { ui.rest = null; if (typeof restWake === 'function') restWake(false); document.body.classList.remove('resting'); const rb = $('#restbar'); rb.classList.remove('show'); rb.innerHTML = ''; delete rb.dataset.k; };
 function swElapsed() { return ui.sw ? (ui.sw.running ? ui.sw.acc + Date.now() - ui.sw.t0 : ui.sw.acc) : 0; }

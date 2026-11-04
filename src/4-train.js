@@ -114,10 +114,17 @@ actions.swap = el => {
   openSheet('Swap ' + e.name, `<p class="muted" style="margin-top:0">Stays swapped for the rest of ${BLOCK.name}.</p>` + b, { close: 'Cancel' });
 };
 actions.doswap = el => {
-  const e = curSess.ex[+el.dataset.ex], nm = el.dataset.name; e.name = nm;
+  const s = curSess, ei = +el.dataset.ex, e = s.ex[ei], nm = el.dataset.name;
   const sw = S.swaps[BLOCK.id] = S.swaps[BLOCK.id] || {}; if (nm === e.orig) delete sw[e.orig]; else sw[e.orig] = nm;
-  const sg = suggestLoad(nm, e.tgt); e.sets.forEach(x => { if (!x.done) x.w = sg.kg; });
-  saveSess(); closeSheet(true); render(); toast('Swapped to ' + nm);
+  const t = adaptPresc(basePrescFor(s, e), nm), done = e.sets.filter(x => x.done);
+  if (done.length) {
+    /* sets already logged belong to the exercise they were done on: keep them, put the swap in below with what's left */
+    e.sets = done;
+    s.ex.splice(ei + 1, 0, { name: nm, orig: e.orig, bi: e.bi, tgt: t, sets: freshSets(t, Math.max(1, t.sets - done.length), recDate(s)), note: '', skipped: false });
+  } else {
+    e.name = nm; e.tgt = t; e.sets = freshSets(t, t.sets, recDate(s));
+  }
+  ui.act = null; saveSess(); closeSheet(true); render(); toast(nm === e.orig ? 'Back to ' + nm : 'Swapped to ' + nm + ' · ' + prescText(t));
 };
 /* finish */
 actions.finish = () => {
