@@ -1,5 +1,11 @@
 /* ===== SPT v2.2 premium (additive; hooks are one-liners in other files) ===== */
 const CHANGELOG = {
+  '2.4.0': [
+    'How you feel now counts. Log a 1 to 5 feel and whether you are sick. When you feel worse than Whoop says, the day follows you, and the card says so.',
+    'Sick days: below the neck means rest, a head cold means train light. Mark it as a sick day and your streak and adherence are not hurt.',
+    'Early illness warning from Whoop: breathing rate, skin temperature, resting heart rate and HRV against your normal.',
+    'First session back after being sick runs on last week’s loads, one RPE lower. One tap restores the full session.'
+  ],
   '2.3.1': [
     'Swaps now change the whole exercise: its own reps, load type, rest, cues and suggested weight. Today and Plan show the swap too.',
     'Swapping after logging sets keeps those sets and adds the new exercise below.',
@@ -118,9 +124,9 @@ function planFor(date) {
   return { t: 'Rest + mobility', s: 'Four mobility drills, then walk and sleep.' };
 }
 function coachLine(date) {
-  const y = yest(date), yc = getCI(y), z = typeof whoopZoneOn === 'function' ? whoopZoneOn(date) : null, sl = sleepFor(date), lane = bowlHrs(y);
+  const y = yest(date), yc = getCI(y), ds = dayStatus(date), sl = sleepFor(date), lane = bowlHrs(y);
   let t;
-  if (z) t = { r: 'Red recovery. Drop the main lift to RPE 6 and cap it at 2 working sets, or swap to Zone 2.', y: 'Yellow recovery. Run the session as written, no top sets above RPE 7.', g: 'Green recovery. Run the session as written.' }[z];
+  if (ds.source !== 'none') t = ds.line;
   else if (yc.doms != null && yc.doms >= 7) t = `Soreness was ${yc.doms}/10 yesterday. Warm up longer and keep every set at RPE 6 or lower.`;
   else if (sl && sl.h < 6) t = `Short sleep (${fmtN(sl.h)} h). Keep it to RPE 7 and skip optional work.`;
   else if (yc.doms != null && yc.doms >= 5) t = `Soreness was ${yc.doms}/10 yesterday. Ease into the first sets before loading up.`;
@@ -139,12 +145,13 @@ function briefExtra(date) {
   } catch (e) { }
   return h;
 }
+function briefWarn(date) { const iw = illnessWarning(date); return iw && iw.n >= 2 ? `<div class="bf-c bf-w">${esc(iw.line)}</div>` : ''; }
 function briefingHTML(date) {
   const h = new Date().getHours(), gr = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening', sl = sleepFor(date), p = planFor(date), b = bowlOf(date);
   return `<div class="bf-g">${gr}</div><div class="bf-d">${fmtDate(date, { weekday: 'long' })}<br>${fmtDate(date, { day: 'numeric', month: 'long' })}</div>
 <div class="bf-l"><div class="bf-r"><span>Sleep</span><div>${sl ? `${fmtN(sl.h)} h<small>from ${sl.src}${sl.q ? ', quality ' + sl.q + '/5' : ''}</small>` : 'Not logged<small>Add it in the check-in</small>'}</div></div>
 <div class="bf-r"><span>Today</span><div>${esc(p.t)}<small>${esc(p.s)}${b ? ' Lanes logged: ' + fmtN(b.hours) + ' h.' : ''}</small></div></div></div>
-${briefExtra(date)}<div class="bf-c">${esc(coachLine(date))}</div>
+${briefExtra(date)}<div class="bf-f">${feelSickHTML(date, true)}</div>${briefWarn(date)}<div class="bf-c">${esc(coachLine(date))}</div>
 <div class="bf-end"><button class="btn pri" data-action="briefcheck">Log check-in</button><button class="btn ghost" data-action="sheetclose">Later</button></div>`;
 }
 function showBriefing(mark) {
@@ -157,9 +164,9 @@ actions.briefing = () => showBriefing(false);
 actions.briefcheck = () => { closeSheet(true); ui.logDate = isoDate(); go('log'); const i = $('[data-in=ci][data-k=bw]'); if (i) i.focus(); };
 
 /* ----- adherence ring + streaks ----- */
-const hasCI = d => { const c = S.checkins[d]; return !!c && ['sleepH', 'doms', 'bw', 'energy', 'sleepQ', 'hr'].some(k => c[k] != null); };
+const hasCI = d => { const c = S.checkins[d]; return !!c && ['sleepH', 'doms', 'bw', 'energy', 'sleepQ', 'hr', 'feel'].some(k => c[k] != null); };
 function adherence(today = isoDate()) {
-  const pl = allSlots().filter(s => DAY_INFO[s.key].gym && s.date <= today), done = pl.filter(s => S.slotStatus[s.id] === 'done').length;
+  const pl = allSlots().filter(s => DAY_INFO[s.key].gym && s.date <= today && S.slotStatus[s.id] !== 'sick'), done = pl.filter(s => S.slotStatus[s.id] === 'done').length;
   let ss = 0; for (const s of pl.slice().sort((a, b) => a.date < b.date ? 1 : -1)) { if (S.slotStatus[s.id] === 'done') ss++; else if (s.date === today) continue; else break; }
   let cs = 0, d = today; if (!hasCI(d)) d = yest(d); while (hasCI(d)) { cs++; d = yest(d); }
   return { planned: pl.length, done, ss, cs };
@@ -171,13 +178,13 @@ function ringCard(today) {
 actions.adhsheet = () => {
   const today = isoDate(); let b = '<div class="card">';
   for (let w = 1; w <= BLOCK.weeks; w++) {
-    const sl = allSlots().filter(s => s.w === w && DAY_INFO[s.key].gym), ws = addDays(BLOCK.start, (w - 1) * 7), we = addDays(ws, 6), pl = sl.filter(s => s.date <= today), dn = pl.filter(s => S.slotStatus[s.id] === 'done').length;
+    const sl = allSlots().filter(s => s.w === w && DAY_INFO[s.key].gym), ws = addDays(BLOCK.start, (w - 1) * 7), we = addDays(ws, 6), pl = sl.filter(s => s.date <= today && S.slotStatus[s.id] !== 'sick'), sk = sl.filter(s => S.slotStatus[s.id] === 'sick').length, dn = pl.filter(s => S.slotStatus[s.id] === 'done').length;
     let ci = 0, lh = 0; for (let d = ws; d <= we && d <= today; d = addDays(d, 1)) { if (hasCI(d)) ci++; lh += bowlHrs(d); }
-    const dots = sl.map(s => `<i class="${S.slotStatus[s.id] === 'done' ? 'on' : S.slotStatus[s.id] === 'skipped' || s.date < today ? 'miss' : ''}"></i>`).join('');
-    b += `<div class="row" style="align-items:flex-start;padding:12px 16px"><div class="grow"><div class="t">Week ${w}${w === 4 ? ' · deload' : ''}</div><div class="s">${ws > today ? 'Not started' : `${dn} of ${pl.length} sessions · ${ci} check-ins${lh ? ' · ' + fmtN(lh) + ' h lanes' : ''}`}</div></div><div class="dots" aria-hidden="true">${dots}</div></div>`;
+    const dots = sl.map(s => `<i class="${S.slotStatus[s.id] === 'done' ? 'on' : S.slotStatus[s.id] === 'sick' ? '' : S.slotStatus[s.id] === 'skipped' || s.date < today ? 'miss' : ''}"></i>`).join('');
+    b += `<div class="row" style="align-items:flex-start;padding:12px 16px"><div class="grow"><div class="t">Week ${w}${w === 4 ? ' · deload' : ''}</div><div class="s">${ws > today ? 'Not started' : `${dn} of ${pl.length} sessions${sk ? ' · ' + sk + ' sick' : ''} · ${ci} check-ins${lh ? ' · ' + fmtN(lh) + ' h lanes' : ''}`}</div></div><div class="dots" aria-hidden="true">${dots}</div></div>`;
   }
   const a = adherence(today);
-  openSheet('Adherence', `<p class="muted" style="margin-top:0">Counts planned sessions up to today. Rest days never break the session streak.</p>${b}</div><div class="grid2" style="margin-top:12px"><div class="card pad kv"><b>${a.cs}</b><span>day check-in streak</span></div><div class="card pad kv"><b>${a.ss}</b><span>session streak</span></div></div>`);
+  openSheet('Adherence', `<p class="muted" style="margin-top:0">Counts planned sessions up to today. Rest days and sick days never break the session streak.</p>${b}</div><div class="grid2" style="margin-top:12px"><div class="card pad kv"><b>${a.cs}</b><span>day check-in streak</span></div><div class="card pad kv"><b>${a.ss}</b><span>session streak</span></div></div>`);
 };
 
 /* ----- bowling log ----- */
@@ -379,20 +386,21 @@ actions.vidreset = () => { delete PX().videos[ui.how]; saveState(); setSheetBody
 function isoWeek(d) { const t = parseISO(d); t.setDate(t.getDate() + 3 - (t.getDay() + 6) % 7); const j = new Date(t.getFullYear(), 0, 4); return t.getFullYear() + '-W' + pad2(1 + Math.round(((t - j) / 864e5 - 3 + (j.getDay() + 6) % 7) / 7)); }
 function reviewData(mon) {
   const today = isoDate(), sun = addDays(mon, 6), inW = d => d >= mon && d <= sun;
-  const slots = allSlots().filter(s => DAY_INFO[s.key].gym && inW(s.date) && s.date <= today), st = s => S.slotStatus[s.id];
+  const slots = allSlots().filter(s => DAY_INFO[s.key].gym && inW(s.date) && s.date <= today && S.slotStatus[s.id] !== 'sick'), st = s => S.slotStatus[s.id];
+  const sickDays = new Set(); for (let d = mon; d <= sun && d <= today; d = addDays(d, 1)) if (getCI(d).sick || allSlots().some(s => s.date === d && S.slotStatus[s.id] === 'sick')) sickDays.add(d);
   const done = slots.filter(s => st(s) === 'done'), skipped = slots.filter(s => st(s) === 'skipped'), missed = slots.filter(s => !st(s) && s.date < today);
   const ton = Object.values(S.sessions).filter(s => inW(s.date)).reduce((a, s) => a + sessionStats(s).ton, 0);
   const cis = Object.entries(S.checkins).filter(([d]) => inW(d)).map(e => e[1]), avg = (a, k) => { const v = a.map(c => c && c[k]).filter(x => x != null); return v.length ? r1(v.reduce((p, q) => p + q, 0) / v.length) : null; };
   let bh = 0, bg = 0, wr = []; for (let d = mon; d <= sun; d = addDays(d, 1)) { const b = bowlOf(d); if (b) { bh += +b.hours || 0; bg += +b.games || 0; } const w = (S.whoop || {})[d]; if (w && w.recovery) wr.push(w.recovery); }
   const lifts = MAIN_LIFTS.map(n => { const L = exLogs(n), cur = Math.max(0, ...L.filter(l => inW(l.date)).map(l => bestE1(l.sets))), pr = Math.max(0, ...L.filter(l => l.date < mon).map(l => bestE1(l.sets))); return { n, cur, d: pr ? cur - pr : null }; }).filter(l => l.cur).sort((a, b) => b.cur - a.cur).slice(0, 3);
   const bw = Math.floor(diffDays(mon, BLOCK.start) / 7) + 1;
-  return { mon, sun, key: isoWeek(mon), planned: slots.length, done, skipped, missed, ton, doms: avg(cis, 'doms'), sleep: avg(cis, 'sleepH'), bh: r1(bh), bg, rec: avg(wr, 'score'), hrv: avg(wr, 'hrv_ms'), lifts, bw: bw >= 1 && bw <= BLOCK.weeks ? bw : null };
+  return { mon, sun, key: isoWeek(mon), sick: sickDays.size, planned: slots.length, done, skipped, missed, ton, doms: avg(cis, 'doms'), sleep: avg(cis, 'sleepH'), bh: r1(bh), bg, rec: avg(wr, 'score'), hrv: avg(wr, 'hrv_ms'), lifts, bw: bw >= 1 && bw <= BLOCK.weeks ? bw : null };
 }
 function reviewText(mon) {
   const d = reviewData(mon), f = PX().reviews[d.key] || {}, wd = s => fmtDate(s.date, { weekday: 'short' }), dash = v => v == null ? '-' : v;
   const L = [`SPT WEEKLY ${d.key} (${fmtShort(d.mon)}-${fmtShort(d.sun)})`, `Block 1 wk ${dash(d.bw)} | adherence ${d.done.length}/${d.planned}${d.planned ? ' (' + Math.round(d.done.length / d.planned * 100) + '%)' : ''}`,
     `Done: ${d.done.map(s => DAY_INFO[s.key].name.slice(-1) + ' ' + wd(s)).join(', ') || 'none'}`, `Skipped/missed: ${d.skipped.concat(d.missed).map(s => DAY_INFO[s.key].name.slice(-1) + ' ' + wd(s)).join(', ') || 'none'}`,
-    `Tonnage: ${d.ton} kg`, `DOMS avg ${dash(d.doms)}/10 | sleep avg ${dash(d.sleep)} h`, `Lanes: ${d.bh} h, ${d.bg} games`];
+    ...(d.sick ? [`Sick days: ${d.sick}`] : []), `Tonnage: ${d.ton} kg`, `DOMS avg ${dash(d.doms)}/10 | sleep avg ${dash(d.sleep)} h`, `Lanes: ${d.bh} h, ${d.bg} games`];
   if (d.rec != null || d.hrv != null) L.push(`Whoop: recovery ${dash(d.rec != null ? Math.round(d.rec) : null)}% | HRV ${dash(d.hrv != null ? Math.round(d.hrv) : null)} ms`);
   L.push('e1RM: ' + (d.lifts.map(l => `${l.n} ${Math.round(l.cur)}${l.d != null ? ' (' + (l.d >= 0 ? '+' : '') + Math.round(l.d) + ')' : ' (new)'}`).join('; ') || 'none logged'));
   let t = L.join('\n');

@@ -57,3 +57,23 @@ a.btn{text-decoration:none;color:var(--ink)}
 .restin.done .bar i{background:var(--o)}
 @keyframes rpulse{0%,100%{box-shadow:0 8px 28px rgba(0,0,0,.4)}50%{box-shadow:0 0 0 4px var(--osoft),0 8px 28px rgba(0,0,0,.4)}}
 @media (prefers-reduced-motion:reduce){.restin.done{animation:none}}
+
+/* ===== illness (v2.4) ===== */
+.chip.fc{flex-direction:column;gap:0;min-height:52px;line-height:1.15;text-align:center}
+.chip.fc b{font-size:15px;font-weight:700}
+.chip.fc small{font-size:11px;font-weight:600;opacity:.8}
+.cgrid .chip.fc{padding:0 2px}
+.lblx{display:flex;align-items:center;justify-content:space-between;margin:6px 0 0}
+.lblx .ib{margin:-4px -8px -4px 0}
+.wh-ov{font-weight:700;margin-bottom:4px}
+.whwarn{display:flex;align-items:center;gap:10px;width:100%;margin-bottom:12px;border-left:4px solid var(--amber);text-align:left;color:var(--ink)}
+.whwarn .grow{flex:1;min-width:0}
+.whone{display:block;width:100%;text-align:left;min-height:44px;font-size:13px;color:var(--ink2);margin-top:4px}
+.wz-s{--wz:var(--wr)}
+.hero.wz-s{border-left:4px solid var(--wz)}
+.retx{display:flex;align-items:center;gap:10px;margin:10px 0;font-size:14px;font-weight:600;position:relative;background:var(--surf);border-left:3px solid var(--o);border-radius:0 12px 12px 0;padding:8px 10px 8px 12px}
+.retx{flex-wrap:wrap}
+.retx span{flex:1 1 100%;min-width:0}
+.hero .retx{background:rgba(255,255,255,.12);border-radius:12px;border-left-color:var(--o);margin:0 0 12px}
+.bf-f{margin-top:4px}
+.bf-w{border-left-color:var(--amber);margin-top:14px}

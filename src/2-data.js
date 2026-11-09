@@ -150,18 +150,46 @@ function dayLabel(c) {
   const i = DAY_INFO[c.key]; return `${BLOCK.name} · Week ${c.w}${c.w === 4 ? ' (deload)' : ''} · ${i.name}`;
 }
 function sessionOf(slot) { return S.sessions['s-' + slot.id] || null; }
+/* ===== return to training: the first session after being sick runs on last week's prescription ===== */
+const wasSick = d => !!getCI(d).sick || allSlots().some(s => s.date === d && S.slotStatus[s.id] === 'sick');
+const lastSickBefore = date => { for (let k = 1; k <= 5; k++) { const d = addDays(date, -k); if (wasSick(d)) return d; } return null; };
+const returnFromIllness = (date = isoDate()) => !wasSick(date) && !!lastSickBefore(date);
+/* last week's prescription for slot item i, sets capped at what this week prescribes, RPE target one lower (min 5) */
+function retP(key, wk, i, sw = true) {
+  const f = sw ? slotPresc : presc, cur = f(key, wk, i), p = f(key, Math.max(1, wk - 1), i);
+  return Object.assign({}, p, { sets: Math.min(p.sets, cur.sets), rpeTarget: Math.max(5, Math.min(p.rpeTarget, cur.rpeTarget) - 1), optional: cur.optional });
+}
+/* true when a session built now for this slot is the first one back (once per illness) */
+function returnEligible(slot) {
+  if (!slot || !['A', 'B', 'C'].includes(slot.key) || (S.flags.returnOff || {})[slot.id] || !returnFromIllness(slot.date)) return false;
+  if (['done', 'sick', 'skipped'].includes(S.slotStatus[slot.id])) return false;
+  const ls = lastSickBefore(slot.date), id = 's-' + slot.id;
+  return !Object.values(S.sessions).some(o => o.id !== id && o.date > ls && o.date <= slot.date && (o.returnMode || o.status === 'done' || (o.ex || []).some(e => e.sets.some(x => x.done)) || (o.rounds || []).some(Boolean)));
+}
+const useReturn = slot => { const s = slot && sessionOf(slot); return s ? !!s.returnMode : returnEligible(slot); };
 function ensureSession(slot) {
   const id = 's-' + slot.id;
   if (S.sessions[id]) return S.sessions[id];
-  const s = { id, slot: slot.id, date: slot.date, key: slot.key, week: slot.w, status: 'draft', start: Date.now(), end: null, note: '', ex: [], rounds: [], u: Date.now() };
+  const ret = returnEligible(slot);
+  const s = { id, slot: slot.id, date: slot.date, key: slot.key, week: slot.w, status: 'draft', start: Date.now(), end: null, note: '', ex: [], rounds: [], returnMode: ret, u: Date.now() };
   if (slot.key === 'A' || slot.key === 'B') {
     s.ex = DAYS[slot.key].map((x, i) => {
-      const p = slotPresc(slot.key, slot.w, i);
+      const p = ret ? retP(slot.key, slot.w, i) : slotPresc(slot.key, slot.w, i);
       return { name: p.name, orig: x.name, bi: i, tgt: p, sets: freshSets(p), note: '', skipped: p.optional };
     });
-  } else if (slot.key === 'C') s.rounds = Array.from({ length: DAY_C.rounds[slot.w - 1] }, () => null);
+  } else if (slot.key === 'C') s.rounds = Array.from({ length: ret ? Math.min(DAY_C.rounds[slot.w - 1], DAY_C.rounds[Math.max(1, slot.w - 1) - 1]) : DAY_C.rounds[slot.w - 1] }, () => null);
   S.sessions[id] = s; saveState();
   return s;
+}
+/* "Use the full session": back to this week's prescription, un-logged sets rebuilt */
+function returnFull(s) {
+  s.returnMode = false;
+  (s.ex || []).forEach(e => {
+    const t = adaptPresc(basePrescFor(s, e), e.name), done = e.sets.filter(x => x.done);
+    e.tgt = t; e.skipped = e.skipped && t.optional; e.sets = done.concat(freshSets(t, Math.max(0, t.sets - done.length), s.date));
+  });
+  if (s.key === 'C') while (s.rounds.length < DAY_C.rounds[s.week - 1]) s.rounds.push(null);
+  s.u = Date.now(); saveState();
 }
 
 /* ===== history, progression, e1RM ===== */
@@ -181,8 +209,8 @@ function setsSummary(sets) {
   return `${n}×${r}${top ? ' @ ' + fmtN(top) + 'kg' : ''}${rp ? ' RPE ' + fmtN(rp) : ''}`;
 }
 function suggestLoad(name, p, date = isoDate()) {
-  const r = suggestLoadBase(name, p, whoopRed(date));
-  return whoopRed(date) ? Object.assign({}, r, { why: (r.why ? r.why + ' · ' : '') + 'recovery red: holding' }) : r;
+  const hd = holdWhy(date), r = suggestLoadBase(name, p, !!hd);
+  return hd ? Object.assign({}, r, { why: (r.why ? r.why + ' · ' : '') + hd }) : r;
 }
 function suggestLoadBase(name, p, hold) {
   const last = exLogs(name)[0], lastTxt = last ? `Last: ${setsSummary(last.sets)}` : '';
@@ -214,7 +242,7 @@ function freshSets(p, n = p.sets, date) {
 /* base (unswapped) prescription for a session exercise */
 function basePrescFor(s, e) {
   const i = e.bi != null ? e.bi : DAYS[s.key].findIndex(x => x.name === e.orig);
-  return i >= 0 ? presc(s.key, s.week, i) : (e.tgt.base ? Object.assign({}, e.tgt, { name: e.tgt.base }) : e.tgt);
+  return i >= 0 ? (s.returnMode ? retP(s.key, s.week, i, false) : presc(s.key, s.week, i)) : (e.tgt.base ? Object.assign({}, e.tgt, { name: e.tgt.base }) : e.tgt);
 }
 /* one-time repair: drafts made before swaps changed the prescription still carry the original exercise's targets */
 function repairSwappedDrafts() {

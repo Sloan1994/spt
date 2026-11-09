@@ -1,6 +1,6 @@
 'use strict';
 /* ===== SPT v2 — core ===== */
-const APP_VERSION = '2.3.1', STATE_KEY = 'spt-v2', OLD_KEY = 'training-app-v1';
+const APP_VERSION = '2.4.0', STATE_KEY = 'spt-v2', OLD_KEY = 'training-app-v1';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

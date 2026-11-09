@@ -87,7 +87,7 @@ function optSyncLoad() {   /* mirror the derived daily load into S.load[date] = 
 
 /* planned session for a day (real draft if present, else a pseudo session built from the prescription) */
 function optPseudo(slot) {
-  return { key: slot.key, rounds: [], ex: DAYS[slot.key].map((x, i) => {
+  return { key: slot.key, rounds: [], ex: (DAYS[slot.key] || []).map((x, i) => {   /* Day C has no exercise list */
     const p = slotPresc(slot.key, slot.w, i);
     return { name: p.name, orig: x.name, bi: i, tgt: p, sets: freshSets(p, p.sets, slot.date), skipped: p.optional };
   }) };
@@ -158,9 +158,12 @@ function optReadiness(date) {
   if (hv != null && base) { const ra = hv / base; comps.push({ k: 'hrv', l: 'HRV vs baseline', wt: .2, s: ra >= 1 ? 100 : optClamp(100 - (1 - ra) * 500, 0, 100), t: Math.round(hv) + ' vs ' + Math.round(base) + ' ms' }); }
   if (ci.doms != null) comps.push({ k: 'doms', l: 'Soreness (inverted)', wt: .1, s: (10 - ci.doms) * 10, t: ci.doms + '/10' });
   const ya = optAcwrAt(addDays(date, -1)); if (ya && ya.ready) comps.push({ k: 'acwr', l: "Yesterday's load band", wt: .1, s: OPT_ACWR_PTS[ya.band], t: OPT_BAND[ya.band].n + ' ' + ya.ewma.toFixed(2) });
-  if (comps.length < 2) return null;
-  const tw = optSum(comps.map(c => c.wt)); comps.forEach(c => { c.w = c.wt / tw; });
-  const score = Math.round(optSum(comps.map(c => c.s * c.w)));
+  const feel = ci.feel != null ? +ci.feel : null, sick = ci.sick || null, cap = sick === 'below' ? 10 : sick === 'above' ? 35 : feel != null && feel <= 2 ? 39 : feel === 3 ? 66 : null;
+  if (comps.length + (feel != null ? 1 : 0) < 2 && cap == null) return null;
+  const tw = optSum(comps.map(c => c.wt)); comps.forEach(c => { c.w = tw ? c.wt / tw : 0; });
+  if (feel != null) { comps.forEach(c => { c.w *= .85; }); comps.push({ k: 'feel', l: 'How you feel', wt: .15, w: comps.length ? .15 : 1, s: (feel - 1) * 25, t: feel + '/5' }); }
+  let score = comps.length ? Math.round(optSum(comps.map(c => c.s * c.w))) : cap;
+  if (cap != null && score >= cap) { score = cap; comps.push({ k: 'cap', l: 'Illness cap', w: 0, s: cap, t: sick === 'below' ? 'Sick, below the neck: capped at 10' : sick === 'above' ? 'Head cold: capped at 35' : feel <= 2 ? 'You feel ' + feel + '/5: capped at 39 (pull back)' : 'You feel 3/5: capped at 66 (steady)' }); }
   return { score, comps, band: score >= 67 ? 'g' : score >= 40 ? 'y' : 'r' };
 }
 /* deload triggers: HRV 7-day avg < 90% of 30-day baseline on 3 consecutive days, OR EWMA ACWR > 1.5, OR soreness >= 7 on 3 of the last 5 days */
@@ -577,7 +580,7 @@ screens.today = function () {
 actions.optready = () => {
   const date = isoDate(), r = optReadiness(date);
   if (!r) return openSheet('Readiness', `<div class="empty">Log sleep and soreness in a check-in to see your score.</div>`);
-  openSheet('Readiness ' + r.score, `<p class="muted" style="margin-top:0">Weighted blend of what you have today. Missing inputs are dropped and the rest reweighted.</p><div class="card">${r.comps.map(c => `<div class="row"><div class="grow"><div class="t">${esc(c.l)}</div><div class="s">${esc(c.t)} · weight ${Math.round(c.w * 100)}%</div></div><b class="tn">${Math.round(c.s)}</b></div>`).join('')}</div><div class="rule">Recovery 40%, sleep vs 8 h 20%, HRV vs baseline 20%, soreness 10%, yesterday's load band 10%. Advisory only.</div>`);
+  openSheet('Readiness ' + r.score, `<p class="muted" style="margin-top:0">Weighted blend of what you have today. Missing inputs are dropped and the rest reweighted.</p><div class="card">${r.comps.map(c => `<div class="row"><div class="grow"><div class="t">${esc(c.l)}</div><div class="s">${esc(c.t)}${c.k === 'cap' ? '' : ' · weight ' + Math.round(c.w * 100) + '%'}</div></div><b class="tn">${Math.round(c.s)}</b></div>`).join('')}</div><div class="rule">Recovery 40%, sleep vs 8 h 20%, HRV vs baseline 20%, soreness 10%, yesterday's load band 10%. When you log how you feel it takes 15% and the rest share 85%. A head cold caps the score at 35, sickness below the neck at 10. Advisory only.</div>`);
 };
 actions.optload = () => {
   const date = isoDate(), pr = optProjected(date), a = pr.acwr;

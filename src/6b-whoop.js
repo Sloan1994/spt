@@ -5,14 +5,65 @@ const whoopOn = () => whoopMock() || !!(WH().connected && WH().url && WH().key);
 ui.whoop = { busy: false, offline: false, err: '' };
 const WZ = { g: { c: 'var(--wg)', n: 'Green' }, y: { c: 'var(--wy)', n: 'Yellow' }, r: { c: 'var(--wr)', n: 'Red' } };
 const whoopZone = s => s == null ? null : s >= 67 ? 'g' : s >= 34 ? 'y' : 'r';
-const WH_TIP = {
-  r: "Red recovery — drop today's main lift to RPE 6 and cap at 2 working sets, or swap to Zone 2.",
-  y: 'Yellow — run the session as written, no top sets above RPE 7.',
-  g: 'Green — session as written.'
+/* coaching lines: the one place they live. Used by the recovery card, the Train chip, the briefing and the suggested-load rule */
+const DS_LINE = {
+  sick: 'Sick, below the neck — no training today. Easy walk only. Back 24 h after symptoms clear.',
+  above: 'Head cold — train light if you want: 2 sets per exercise, RPE 6, no conditioning, stop at 40 min.',
+  red: 'Red — main lift RPE 6 and 2 working sets, or swap for Zone 2.',
+  yellow: 'Yellow — session as written, nothing above RPE 7.',
+  green: 'Green — session as written.'
 };
+const WH_TIP = { r: DS_LINE.red, y: DS_LINE.yellow, g: DS_LINE.green };
 function whoopDay(d) { const w = S.whoop && S.whoop[d]; return w && (w.recovery || w.sleep) ? w : null; }
 const whoopZoneOn = d => { const w = whoopDay(d); return w && w.recovery ? whoopZone(w.recovery.score) : null; };
 const whoopRed = (d = isoDate()) => whoopZoneOn(d) === 'r';
+const ZNAME = { g: 'green', y: 'yellow', r: 'red' }, ZRANK = { red: 0, yellow: 1, green: 2 };
+const feelZone = f => f == null ? null : f <= 2 ? 'red' : f === 3 ? 'yellow' : 'green';
+
+/* ----- illness early warning: today's Whoop numbers against the median of the last 14 days (today excluded) ----- */
+const ILL = [
+  { k: 'resp', l: 'Breathing rate', u: 'br/min', dp: 1, get: w => w.sleep && w.sleep.respiratory_rate, bad: (v, m) => v >= m + 1 - 1e-9, word: (v, m) => `breathing rate +${r1(v - m)} br/min` },
+  { k: 'temp', l: 'Skin temperature', u: '°C', dp: 1, get: w => w.recovery && w.recovery.skin_temp_c, bad: (v, m) => v >= m + .5 - 1e-9, word: (v, m) => `skin temperature +${r1(v - m)} °C` },
+  { k: 'rhr', l: 'Resting heart rate', u: 'bpm', dp: 0, get: w => w.recovery && w.recovery.rhr_bpm, bad: (v, m) => v >= m + 5 - 1e-9, word: (v, m) => `resting heart rate +${Math.round(v - m)} bpm` },
+  { k: 'hrv', l: 'HRV', u: 'ms', dp: 0, get: w => w.recovery && w.recovery.hrv_ms, bad: (v, m) => v <= m * .85 + 1e-9, word: (v, m) => `HRV down ${Math.round((1 - v / m) * 100)}%` }
+];
+function illnessWarning(date = isoDate()) {
+  const t = whoopDay(date); if (!t) return null;
+  const rows = [];
+  ILL.forEach(m => {
+    const v = m.get(t), base = []; for (let i = 1; i <= 14; i++) { const w = whoopDay(addDays(date, -i)), x = w && m.get(w); if (typeof x === 'number' && !isNaN(x)) base.push(x); }
+    if (typeof v !== 'number' || isNaN(v) || base.length < 7) return;
+    const b = base.slice().sort((x, y) => x - y), h = b.length >> 1, med = b.length % 2 ? b[h] : (b[h - 1] + b[h]) / 2;
+    rows.push({ k: m.k, l: m.l, u: m.u, dp: m.dp, v, med, flag: m.bad(v, med), word: m.word(v, med) });
+  });
+  if (!rows.length) return null;
+  const fl = rows.filter(r => r.flag), words = fl.map(r => r.word);
+  const text = words.length > 1 ? words.slice(0, -1).join(', ') + ' and ' + words[words.length - 1] : words[0] || '';
+  return { rows, flags: fl, n: fl.length, text, line: `Possible illness coming: ${text}. Treat today as yellow and sleep early.` };
+}
+
+/* ----- one source of truth for the day: Whoop, how you feel, sickness, the early warning ----- */
+function dayStatus(date = isoDate()) {
+  const ci = getCI(date), w = whoopDay(date), sc = w && w.recovery && w.recovery.score != null ? w.recovery.score : null;
+  const wz = sc != null ? ZNAME[whoopZone(sc)] : null, feel = ci.feel != null ? +ci.feel : null, fz = feelZone(feel), sick = ci.sick || null;
+  let zone = wz || fz || 'green', source = wz ? 'whoop' : fz ? 'feel' : 'none';
+  if (wz && fz && ZRANK[fz] < ZRANK[wz]) { zone = fz; source = 'feel'; }
+  if (sick === 'below') { zone = 'sick'; source = 'sick'; }
+  else if (sick === 'above') { zone = 'red'; source = 'sick'; }
+  else if (feel == null) { const iw = illnessWarning(date); if (iw && iw.n >= 2 && ZRANK[zone] > 1) { zone = 'yellow'; source = 'warning'; } }
+  const line = zone === 'sick' ? DS_LINE.sick : sick === 'above' ? DS_LINE.above : DS_LINE[zone];
+  return { zone, source, whoop: wz, score: sc, feel, sick, line };
+}
+const zcol = z => z === 'green' ? 'var(--wg)' : z === 'yellow' ? 'var(--wy)' : 'var(--wr)';
+const overrideNote = ds => ds.whoop && ds.source === 'feel' ? `Whoop says ${ds.whoop} ${ds.score}%, you said ${ds.feel}/5 — going with how you feel.` : '';
+/* why suggested loads hold today (empty = no hold) */
+function holdWhy(date) {
+  const d = dayStatus(date);
+  if (d.sick === 'below') return 'sick: holding';
+  if (d.sick === 'above') return 'head cold: holding';
+  if (d.zone !== 'red') return '';
+  return d.source === 'whoop' ? 'recovery red: holding' : 'feeling rough: holding';
+}
 const agoTxt = ms => { const m = Math.max(0, Math.round((Date.now() - ms) / 60000)); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
 
 /* ----- fetch ----- */
@@ -50,16 +101,16 @@ function fillCheckin(d) {
 /* ----- built-in mock generator (localStorage['spt-whoop-mock']==='1') ----- */
 function mockWhoopDays() {
   const today = isoDate(), rnd = i => { const x = Math.sin(i * 12.9898 + 4.1) * 43758.5453; return x - Math.floor(x); };
-  let ov = null; try { ov = localStorage.getItem('spt-whoop-mock-today'); } catch (e) { }
+  let ov = null, ill = false; try { ov = localStorage.getItem('spt-whoop-mock-today'); ill = localStorage.getItem('spt-whoop-mock-ill') === '1'; } catch (e) { }
   const out = [];
   for (let i = 29; i >= 0; i--) {
     const date = addDays(today, -i), k = parseISO(date).getTime() / 864e5;
     let rec = Math.round(Math.max(6, Math.min(98, 58 + 26 * Math.sin(k / 3.1) + (rnd(k) - .5) * 28)));
     if (i === 0 && ov) rec = { red: 24, yellow: 52, green: 84 }[ov] || rec;
-    const hrv = r1(46 + rec * .42 + rnd(k + 1) * 6), rhr = Math.round(61 - rec * .13 + rnd(k + 2) * 3), sh = r1(Math.max(4.8, 6.1 + rec / 100 * 1.7 + (rnd(k + 3) - .5) * 1.2));
+    const hrv = r1(46 + rec * .42 + rnd(k + 1) * 6), rhr = Math.round(61 - rec * .13 + rnd(k + 2) * 3) + (ill && i <= 1 ? 7 : 0), sh = r1(Math.max(4.8, 6.1 + rec / 100 * 1.7 + (rnd(k + 3) - .5) * 1.2));
     const perf = Math.round(Math.min(100, 66 + rec * .28 + rnd(k + 4) * 6));
-    out.push({ date, recovery: { score: rec, hrv_ms: hrv, rhr_bpm: rhr, spo2: 96.8, skin_temp_c: 33.4, state: rec >= 67 ? 'green' : rec >= 34 ? 'yellow' : 'red' },
-      sleep: { start: date + 'T23:10:00Z', end: date + 'T07:05:00Z', hours: sh, performance_pct: perf, efficiency_pct: 91, consistency_pct: 78, respiratory_rate: 15.1, stages: { light_h: r1(sh * .5), sws_h: r1(sh * .22), rem_h: r1(sh * .28), awake_h: .5 }, debt_h: .4 },
+    out.push({ date, recovery: { score: rec, hrv_ms: hrv, rhr_bpm: rhr, spo2: 96.8, skin_temp_c: r1(33.4 + (ill && i <= 1 ? .7 : 0)), state: rec >= 67 ? 'green' : rec >= 34 ? 'yellow' : 'red' },
+      sleep: { start: date + 'T23:10:00Z', end: date + 'T07:05:00Z', hours: sh, performance_pct: perf, efficiency_pct: 91, consistency_pct: 78, respiratory_rate: r1(15.1 + (ill && i <= 1 ? 1.4 : 0)), stages: { light_h: r1(sh * .5), sws_h: r1(sh * .22), rem_h: r1(sh * .28), awake_h: .5 }, debt_h: .4 },
       strain: { day_strain: r1(7 + rnd(k + 5) * 9), kilojoules: 8200, avg_hr: 66, max_hr: 168 }, workouts: [] });
   }
   return out;
@@ -98,16 +149,34 @@ function bindPTR() {
 }
 
 /* ----- Today: recovery card ----- */
+const warnOne = iw => `<button class="whone" data-action="illness">One early sign: ${esc(iw.flags[0].word)}. Tap for details</button>`;
 function recoveryCard(date) {
-  if (!whoopOn()) return '';
-  const d = whoopDay(date), off = ui.whoop.offline && !whoopMock(), chip = off ? '<span class="pill o" role="status">Whoop: offline</span>' : '';
-  if (!d || !d.recovery || d.recovery.score == null) return `<div class="card pad whwait"><div class="grow"><b>Whoop</b><div class="s muted" style="font-size:14px">${d && d.sleep ? 'Sleep synced. Recovery is not scored yet.' : 'No recovery for today yet.'}</div></div>${chip}</div>`;
+  const ds = dayStatus(date), iw = illnessWarning(date), logged = ds.feel != null || ds.sick, d = whoopDay(date);
+  const warn = iw && iw.n >= 2 ? `<button class="card pad whwarn" data-action="illness" aria-label="Possible illness coming. Show details"><div class="grow"><b>Possible illness coming</b><div class="s muted" style="font-size:14px">${esc(iw.text.replace(/^./, c => c.toUpperCase()))}. Treat today as yellow and sleep early.</div></div>${chev}</button>` : '';
+  const one = iw && iw.n === 1 ? warnOne(iw) : '';
+  const note = overrideNote(ds), tip = `<div class="wh-tip" style="border-left:3px solid ${zcol(ds.zone === 'sick' ? 'red' : ds.zone)}">${note ? `<div class="wh-ov">${esc(note)}</div>` : ''}${esc(ds.line)}</div>`;
+  const feelTxt = ds.feel != null ? `You feel ${ds.feel}/5` : '';
+  /* no Whoop recovery today: a compact card when feel or sickness is logged */
+  const compact = () => logged ? `<div class="card pad whc" style="--wz:${zcol(ds.zone === 'sick' ? 'red' : ds.zone)}"><div class="t" style="font-weight:700;font-size:19px">Today <span style="color:var(--wz)">${ds.zone === 'sick' ? 'Sick' : cap(ds.zone)}</span></div><div class="s muted" style="font-size:13px;margin:2px 0 10px">${esc([feelTxt, ds.sick ? (ds.sick === 'above' ? 'Head cold' : 'Run down') : ''].filter(Boolean).join(' · '))}</div>${tip}${one}</div>` : '';
+  if (!whoopOn()) return compact();
+  const off = ui.whoop.offline && !whoopMock(), chip = off ? '<span class="pill o" role="status">Whoop: offline</span>' : '';
+  if (!d || !d.recovery || d.recovery.score == null) return `<div class="card pad whwait"><div class="grow"><b>Whoop</b><div class="s muted" style="font-size:14px">${d && d.sleep ? 'Sleep synced. Recovery is not scored yet.' : 'No recovery for today yet.'}</div>${one}</div>${chip}</div>` + (logged ? compact() : '') + warn;
   const r = d.recovery, z = whoopZone(r.score), c = WZ[z].c, sl = d.sleep || {}, y = S.whoop[addDays(date, -1)], ys = y && y.strain ? y.strain.day_strain : null, circ = 2 * Math.PI * 30;
   const st = (v, u, l) => `<div class="kv"><b>${v}<small>${u}</small></b><span>${l}</span></div>`;
-  return `<div class="card pad whc" style="--wz:${c}"><div class="wh-top"><svg class="ring" viewBox="0 0 72 72" role="img" aria-label="Recovery ${r.score} percent, ${WZ[z].n}"><circle cx="36" cy="36" r="30" class="rt"/><circle cx="36" cy="36" r="30" class="rv" stroke-dasharray="${(circ * r.score / 100).toFixed(1)} ${circ.toFixed(1)}" transform="rotate(-90 36 36)"/><text x="36" y="43" text-anchor="middle">${r.score}%</text></svg><div class="grow"><div class="t" style="font-weight:700;font-size:19px">Recovery <span style="color:var(--wz)">${WZ[z].n}</span></div><div class="s muted" style="font-size:13px">Whoop · ${fmtDate(date, { weekday: 'short', day: 'numeric', month: 'short' })}</div>${chip}</div></div><div class="wh-g">${st(r.hrv_ms != null ? Math.round(r.hrv_ms) : '–', ' ms', 'HRV')}${st(r.rhr_bpm ?? '–', ' bpm', 'Resting HR')}${st(sl.hours != null ? fmtN(sl.hours) : '–', ' h', sl.performance_pct != null ? 'Sleep · ' + sl.performance_pct + '%' : 'Sleep')}${st(ys != null ? fmtN(ys) : '–', '', 'Strain yesterday')}</div><div class="wh-tip">${esc(WH_TIP[z])}</div></div>`;
+  return `<div class="card pad whc" style="--wz:${c}"><div class="wh-top"><svg class="ring" viewBox="0 0 72 72" role="img" aria-label="Recovery ${r.score} percent, ${WZ[z].n}"><circle cx="36" cy="36" r="30" class="rt"/><circle cx="36" cy="36" r="30" class="rv" stroke-dasharray="${(circ * r.score / 100).toFixed(1)} ${circ.toFixed(1)}" transform="rotate(-90 36 36)"/><text x="36" y="43" text-anchor="middle">${r.score}%</text></svg><div class="grow"><div class="t" style="font-weight:700;font-size:19px">Recovery <span style="color:var(--wz)">${WZ[z].n}</span></div><div class="s muted" style="font-size:13px">Whoop · ${fmtDate(date, { weekday: 'short', day: 'numeric', month: 'short' })}</div>${chip}</div></div><div class="wh-g">${st(r.hrv_ms != null ? Math.round(r.hrv_ms) : '–', ' ms', 'HRV')}${st(r.rhr_bpm ?? '–', ' bpm', 'Resting HR')}${st(sl.hours != null ? fmtN(sl.hours) : '–', ' h', sl.performance_pct != null ? 'Sleep · ' + sl.performance_pct + '%' : 'Sleep')}${st(ys != null ? fmtN(ys) : '–', '', 'Strain yesterday')}</div>${tip}${one}</div>` + warn;
 }
-const wzCls = date => { const z = whoopZoneOn(date); return z ? ' wz-' + z : ''; };
-const recChip = date => { const w = whoopDay(date); if (!w || !w.recovery || w.recovery.score == null) return ''; const z = whoopZone(w.recovery.score); return ` <span class="pill wchip" style="--wz:${WZ[z].c}">Recovery ${w.recovery.score}%</span>`; };
+/* the session card's left border follows the day's status, not just Whoop */
+const wzCls = date => { const d = dayStatus(date); return d.source === 'none' ? '' : d.zone === 'sick' ? ' wz-s' : ' wz-' + { green: 'g', yellow: 'y', red: 'r' }[d.zone]; };
+const recChip = date => {
+  const d = dayStatus(date); if (d.source === 'none') return '';
+  const txt = d.sick ? (d.sick === 'above' ? 'Head cold' : 'Sick') : d.source === 'feel' ? `Feel ${d.feel}/5` : d.source === 'warning' ? 'Illness warning' : `Recovery ${d.score}%`;
+  return ` <span class="pill wchip" style="--wz:${zcol(d.zone === 'sick' ? 'red' : d.zone)}" title="${esc(d.line)}">${esc(txt)}</span>`;
+};
+actions.illness = () => {
+  const iw = illnessWarning(isoDate()); if (!iw) return;
+  const fmt = (v, dp) => dp ? r1(v).toFixed(1) : String(Math.round(v));
+  openSheet('Illness early warning', `<p class="muted" style="margin-top:0">Today against your normal, the median of the last 14 days. Two or more flags is an early sign of illness.</p><div class="card">${iw.rows.map(r => `<div class="row"><div class="grow"><div class="t">${esc(r.l)}</div><div class="s">Today ${fmt(r.v, r.dp)} ${r.u} · normal ${fmt(r.med, r.dp)} ${r.u}</div></div>${r.flag ? '<span class="pill o">Flagged</span>' : '<span class="pill g">Normal</span>'}</div>`).join('')}</div><div class="rule">Flags: breathing rate 1 br/min or more above normal, skin temperature 0.5 °C or more above, resting heart rate 5 bpm or more above, HRV 15% or more below.</div>`);
+};
 
 /* ----- Plan: Whoop card ----- */
 function whoopSettingsHTML() {

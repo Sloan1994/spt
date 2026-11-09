@@ -2,6 +2,19 @@
 
 Newest first. The in-app "What's new" sheet shows every version newer than the last one you opened, from the `CHANGELOG` constant in `src/8-premium.js`.
 
+## 2.4.0
+
+How you feel beats Whoop, illness warning, return to training.
+
+- Check-in (Log, Today quick check-in, morning briefing): "How do you feel?" 1 to 5 and "Sick?" (No, head cold above the neck, run down below the neck) with a "?" explainer. Stored as `checkins[date].feel` and `.sick` (`null`, `'above'`, `'below'`).
+- `dayStatus(date)` is the single source of truth for the day: the worse of Whoop and feel, then sickness, then the illness warning. It drives the recovery card (with a "Whoop says green 84%, you said 2/5, going with how you feel" note), the session card tint, the Train header chip, the suggested-load hold rule, the briefing coaching line and the readiness tile.
+- Readiness gains "How you feel" at 15% (the others rebalanced to 85%); a head cold caps it at 35, sickness below the neck at 10.
+- Sick below the neck turns the session card into "Sick day, rest" with Mark as sick day (`slotStatus = 'sick'`) and Train anyway. Sick slots show a chip in Plan, do not break the session streak and are left out of the planned count in adherence and the weekly review, which gains "Sick days: N".
+- Illness early warning: today's breathing rate, skin temperature, resting HR and HRV against the median of the last 14 days (7 valid days needed). Two or more flags show a card on Today, a briefing line and a today-vs-normal sheet; one flag is a single muted line.
+- Return to training: the first session after being sick (any of the previous 5 days) is built from last week's prescription (sets capped, RPE one lower, minimum 5, swaps still applied), with a banner on Today and Train and a "Use the full session" button. Once per illness.
+- Fix: Today no longer throws on a Day C date before the session is started (Load tile, `optPseudo`).
+- Test data: `localStorage['spt-whoop-mock-ill']='1'` raises breathing rate, skin temperature and resting HR on the last two mock days.
+
 ## 2.3.0
 
 Training optimisation pass, merged with the premium (2.2) and Whoop (2.1) work.
