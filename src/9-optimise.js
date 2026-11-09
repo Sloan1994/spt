@@ -158,12 +158,12 @@ function optReadiness(date) {
   if (hv != null && base) { const ra = hv / base; comps.push({ k: 'hrv', l: 'HRV vs baseline', wt: .2, s: ra >= 1 ? 100 : optClamp(100 - (1 - ra) * 500, 0, 100), t: Math.round(hv) + ' vs ' + Math.round(base) + ' ms' }); }
   if (ci.doms != null) comps.push({ k: 'doms', l: 'Soreness (inverted)', wt: .1, s: (10 - ci.doms) * 10, t: ci.doms + '/10' });
   const ya = optAcwrAt(addDays(date, -1)); if (ya && ya.ready) comps.push({ k: 'acwr', l: "Yesterday's load band", wt: .1, s: OPT_ACWR_PTS[ya.band], t: OPT_BAND[ya.band].n + ' ' + ya.ewma.toFixed(2) });
-  const feel = ci.feel != null ? +ci.feel : null, sick = ci.sick || null, cap = sick === 'below' ? 10 : sick === 'above' ? 35 : null;
+  const feel = ci.feel != null ? +ci.feel : null, sick = ci.sick || null, cap = sick === 'below' ? 10 : sick === 'above' ? 35 : feel != null && feel <= 2 ? 39 : feel === 3 ? 66 : null;
   if (comps.length + (feel != null ? 1 : 0) < 2 && cap == null) return null;
   const tw = optSum(comps.map(c => c.wt)); comps.forEach(c => { c.w = tw ? c.wt / tw : 0; });
   if (feel != null) { comps.forEach(c => { c.w *= .85; }); comps.push({ k: 'feel', l: 'How you feel', wt: .15, w: comps.length ? .15 : 1, s: (feel - 1) * 25, t: feel + '/5' }); }
   let score = comps.length ? Math.round(optSum(comps.map(c => c.s * c.w))) : cap;
-  if (cap != null && score >= cap) { score = cap; comps.push({ k: 'cap', l: 'Illness cap', w: 0, s: cap, t: sick === 'below' ? 'Sick, below the neck: capped at 10' : 'Head cold: capped at 35' }); }
+  if (cap != null && score >= cap) { score = cap; comps.push({ k: 'cap', l: 'Illness cap', w: 0, s: cap, t: sick === 'below' ? 'Sick, below the neck: capped at 10' : sick === 'above' ? 'Head cold: capped at 35' : feel <= 2 ? 'You feel ' + feel + '/5: capped at 39 (pull back)' : 'You feel 3/5: capped at 66 (steady)' }); }
   return { score, comps, band: score >= 67 ? 'g' : score >= 40 ? 'y' : 'r' };
 }
 /* deload triggers: HRV 7-day avg < 90% of 30-day baseline on 3 consecutive days, OR EWMA ACWR > 1.5, OR soreness >= 7 on 3 of the last 5 days */
