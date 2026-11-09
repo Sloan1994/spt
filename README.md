@@ -19,7 +19,7 @@ Morning briefing, adherence ring and streaks, session recap with a shareable ima
 
 Training load and the acute:chronic ratio (ACWR) with Load and Readiness tiles on Today, accessory-set trim advice, HRV/load/soreness-guided deload proposals, grip test with asymmetry, per-game lane scores with performance correlations, travel mode (jet-lag plan, hotel-gym swaps), sleep regularity and a bedtime anchor, session timing from set timestamps, voice logging in the set pad, day-type nutrition targets with context-aware food verdicts, and Learn explainers in Plan. The briefing, recap and weekly review pick up the readiness band, bedtime anchor, session timing, ACWR and lane insights. See `CHANGELOG.md` for every version.
 
-Test data: `localStorage['spt-whoop-mock']='1'` fills 30 days of sample Whoop data; `localStorage['spt-opt-mock']='1'` (scenario in `spt-opt-mock-scenario`: steady, caution, spike or hrv) fills 35 days of sample load, sleep, grip and lane data.
+Test data: `localStorage['spt-whoop-mock']='1'` fills 30 days of sample Whoop data (add `spt-whoop-mock-ill`='1' to raise breathing rate, skin temperature and resting HR on the last two days, for the illness warning); `localStorage['spt-opt-mock']='1'` (scenario in `spt-opt-mock-scenario`: steady, caution, spike or hrv) fills 35 days of sample load, sleep, grip and lane data.
 
 The `index.html` here is built from the sources in the build folder (`src/1-core.js` ... `src/9-optimise.js`, `style.css`, `premium.css`, `optimise.css`) and minified with esbuild. It is about 230 KB.
 

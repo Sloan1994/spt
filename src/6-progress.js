@@ -35,9 +35,9 @@ screens.progress = () => {
   const cur = Math.max(1, Math.min(BLOCK.weeks, Math.floor(diffDays(today, BLOCK.start) / 7) + 1));
   h += `<div class="hl">`;
   for (let w = 1; w <= cur; w++) {
-    const ws = addDays(BLOCK.start, (w - 1) * 7), we = addDays(ws, 6), done = allSlots().filter(s => s.w === w && DAY_INFO[s.key].gym && S.slotStatus[s.id] === 'done').length;
+    const ws = addDays(BLOCK.start, (w - 1) * 7), we = addDays(ws, 6), done = allSlots().filter(s => s.w === w && DAY_INFO[s.key].gym && S.slotStatus[s.id] === 'done').length, sick = allSlots().filter(s => s.w === w && DAY_INFO[s.key].gym && S.slotStatus[s.id] === 'sick').length, plan = 3 - sick;
     const cis = Object.entries(S.checkins).filter(([d]) => d >= ws && d <= we).map(e => e[1]), avg = k => { const v = cis.map(c => c[k]).filter(x => x != null); return v.length ? r1(v.reduce((a, b) => a + b, 0) / v.length) : '–'; };
-    h += `<div class="card wk"><div class="muted" style="font-size:13px;font-weight:600">Week ${w}${w === 4 ? ' deload' : ''}</div><div class="kv" style="margin:6px 0"><b>${Math.round(done / 3 * 100)}%</b><span>adherence · ${done}/3 sessions</span></div><div class="s" style="font-size:13px;color:var(--ink2)">Soreness ${avg('doms')} · sleep ${avg('sleepH')} h</div>${whoopWeek(ws, we)}</div>`;
+    h += `<div class="card wk"><div class="muted" style="font-size:13px;font-weight:600">Week ${w}${w === 4 ? ' deload' : ''}</div><div class="kv" style="margin:6px 0"><b>${plan ? Math.round(done / plan * 100) : 0}%</b><span>adherence · ${done}/${plan} sessions${sick ? ' · ' + sick + ' sick' : ''}</span></div><div class="s" style="font-size:13px;color:var(--ink2)">Soreness ${avg('doms')} · sleep ${avg('sleepH')} h</div>${whoopWeek(ws, we)}</div>`;
   }
   h += `</div>`;
   /* bodyweight */

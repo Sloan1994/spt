@@ -45,10 +45,11 @@ screens.train = () => {
   const i = DAY_INFO[slot.key], s = sessionOf(slot);
   curSess = s; ui.trainSess = () => curSess;
   let h = `<h1>${i.name}</h1><p class="sub">${i.title} · week ${slot.w} · ${fmtDate(slot.date, { weekday: 'short', day: 'numeric', month: 'short' })}${s ? recChip(recDate(s)) : recChip(isoDate())}</p>`;
+  h += returnBanner(slot);
   if (!s) return h + `<div class="card pad"><p style="margin:0 0 12px">${slot.key === 'C' ? DAY_C.rounds[slot.w - 1] + ' rounds. Log each round time.' : DAYS[slot.key].length + ' exercises. Your sets save as you go.'}</p><button class="btn pri" data-action="startsession" data-slot="${slot.id}">Start session</button></div><button class="btn ghost" style="margin-top:10px" data-action="pickslot">Choose another session</button>`;
   const st = sessionStats(s);
   h += `<div class="sess-bar">${s.key === 'C' ? `<div class="kv"><b id="st-sets">${st.rounds}/${s.rounds.length}</b><span>rounds</span></div>` : `<div class="kv"><b id="st-sets">${st.sets}</b><span>sets</span></div><div class="kv"><b id="st-ton">${st.ton.toLocaleString('en-IE')}</b><span>kg lifted</span></div>`}<div class="kv"><b id="sesstime">${fmtDur(st.dur)}</b><span>time</span></div><div style="flex:1"></div>${s.status === 'done' ? '<span class="pill g">Complete</span>' : '<span class="pill">Draft</span>'}</div>`;
-  if (s.key === 'C') h += roundsHTML(s, slot);
+  if (s.key === 'C') h += roundsHTML(s, s.returnMode ? Object.assign({}, slot, { w: Math.max(1, slot.w - 1) }) : slot);
   else {
     if (s.key === 'B' && slot.w === 1) h += `<div class="rule">${DAY_B_CAP}</div>`;
     h += s.ex.map((_, ei) => exHTML(s, ei)).join('');

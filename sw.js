@@ -1,5 +1,5 @@
 /* SPT service worker. Bump CACHE_VERSION on every release. */
-const CACHE_VERSION = 'v2.3.1-1';
+const CACHE_VERSION = 'v2.4.0-1';
 const CACHE = 'spt-' + CACHE_VERSION;
 const SHELL = ['./', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'favicon-32.png', 'favicon-16.png', 'maskable-512.png'];
 

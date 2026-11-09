@@ -3,9 +3,28 @@ const getCI = d => S.checkins[d] || {};
 const srcWithout = (d, k) => { const s = Object.assign({}, getCI(d).src); delete s[k]; return s; };
 function setCI(d, patch) { S.checkins[d] = Object.assign({}, S.checkins[d], patch, { u: Date.now() }); saveState(); }
 const exLink = (n, cls = '') => `<button class="${cls}" data-action="exhist" data-ex="${esc(n)}">${esc(n)}</button>`;
-function prescList(key, wk) {
-  return DAYS[key].map((_, i) => slotPresc(key, wk, i));
+function prescList(key, wk, ret) {
+  return DAYS[key].map((_, i) => ret ? retP(key, wk, i) : slotPresc(key, wk, i));
 }
+/* ----- how you feel + sick chips (Log, Today quick check-in, briefing) ----- */
+const FEEL = ['Awful', 'Rough', 'OK', 'Good', 'Great'];
+function feelSickHTML(d, first) {
+  const c = getCI(d), sk = [[null, 'No', ''], ['above', 'Head cold', 'above the neck'], ['below', 'Run down', 'below the neck']];
+  return `<div class="lbl"${first ? ' style="margin-top:0"' : ''}>How do you feel?</div><div class="chips o cgrid" style="grid-template-columns:repeat(5,1fr)" role="group" aria-label="How do you feel">${FEEL.map((l, i) => `<button class="chip fc" data-action="cifeel" data-d="${d}" data-v="${i + 1}" aria-pressed="${c.feel === i + 1}"><b>${i + 1}</b><small>${l}</small></button>`).join('')}</div>`
+    + `<div class="lbl lblx">Sick?<button class="ib" data-action="sickinfo" aria-label="What counts as sick">?</button></div><div class="chips o cgrid" style="grid-template-columns:.8fr 1.1fr 1.3fr" role="group" aria-label="Sick">${sk.map(([v, l, sm]) => `<button class="chip fc" data-action="cisick" data-d="${d}" data-v="${v || ''}" aria-pressed="${v ? c.sick === v : c.sick === null}"><b>${l}</b>${sm ? `<small>${sm}</small>` : ''}</button>`).join('')}</div>`;
+}
+function ciRefresh() { render(); if (ui.sheet && ui.sheet.title === 'Briefing') setSheetBody(briefingHTML(isoDate())); }
+actions.cifeel = el => { const d = el.dataset.d, v = +el.dataset.v; setCI(d, { feel: getCI(d).feel === v ? null : v }); vib(6); ciRefresh(); };
+actions.cisick = el => { const d = el.dataset.d, v = el.dataset.v || null, c = getCI(d); setCI(d, { sick: (v ? c.sick === v : c.sick === null) ? undefined : v }); vib(6); ciRefresh(); };
+actions.sickinfo = () => openSheet('What counts as sick', `<div class="card pad"><div class="reason"><b>Head cold, above the neck:</b> blocked or runny nose, sneezing, a mild sore throat.</div><div class="reason"><b>Run down, below the neck:</b> fever or chills, aches, chest symptoms, cough, stomach upset, swollen glands.</div></div><div class="rule">Above the neck you can train light. Below the neck, rest, then wait 24 hours after symptoms clear.</div>`);
+actions.trainanyway = () => { ui.trainAnyway = isoDate(); vib(6); render(); };
+actions.returnfull = el => {
+  const slot = allSlots().find(x => x.id === el.dataset.slot); if (!slot) return;
+  const s = sessionOf(slot);
+  if (s) { returnFull(s); if (curSess && curSess.id === s.id) ui.act = null; } else { S.flags.returnOff = S.flags.returnOff || {}; S.flags.returnOff[slot.id] = true; saveState(); }
+  vib(8); toast('Full session restored'); render();
+};
+const returnBanner = slot => !slot || !useReturn(slot) || (sessionOf(slot) || {}).status === 'done' ? '' : `<div class="retx"><span>First session back after being sick — loads stepped back a week.</span><button class="btn sm" data-action="returnfull" data-slot="${slot.id}">Use the full session</button></div>`;
 
 /* ===== TODAY ===== */
 screens.today = () => {
@@ -17,15 +36,20 @@ screens.today = () => {
   h += recoveryCard(date);
   /* hero */
   if (c.phase === 'in' && (c.key === 'A' || c.key === 'B' || c.key === 'C') && slot) {
-    const s = sessionOf(slot), st = s ? sessionStats(s) : null, done = s && s.status === 'done';
-    h += `<div class="hero${wzCls(date)}"><div class="letter">${c.key}</div><span class="tag" style="background:rgba(255,255,255,.16);color:#fff;position:relative">${info.name}</span><h2>${info.title}</h2><div class="meta">${c.key === 'C' ? DAY_C.rounds[slot.w - 1] + ' rounds' : DAYS[c.key].length + ' exercises'} · week ${slot.w}${slot.w === 4 ? ', deload' : ''}${c.status ? ' · ' + c.status : ''}</div><ul>`;
+    const s = sessionOf(slot), st = s ? sessionStats(s) : null, done = s && s.status === 'done', ds = dayStatus(date), ret = useReturn(slot);
+    if (!done && !(st && st.sets + st.rounds) && (ds.zone === 'sick' || c.status === 'sick') && ui.trainAnyway !== date) {
+      h += `<div class="hero rest wz-s"><div class="letter">+</div><h2>Sick day — rest</h2><div class="meta">${info.name} · ${info.title} · week ${slot.w}</div><ul><li><span style="opacity:1;white-space:normal">${esc(ds.zone === 'sick' ? DS_LINE.sick : 'Marked as a sick day. Undo it if you are training after all.')}</span></li></ul>${c.status === 'sick' ? `<button class="btn" data-action="slotmark" data-slot="${slot.id}" data-st="">Marked as sick day. Tap to undo</button>` : `<button class="btn pri" data-action="slotmark" data-slot="${slot.id}" data-st="sick">Mark as sick day</button>`}<button class="btn ghost" style="margin-top:8px" data-action="trainanyway">Train anyway</button></div>`;
+    } else {
+    h += `<div class="hero${wzCls(date)}"><div class="letter">${c.key}</div><span class="tag" style="background:rgba(255,255,255,.16);color:#fff;position:relative">${info.name}</span><h2>${info.title}</h2><div class="meta">${c.key === 'C' ? (ret ? Math.min(DAY_C.rounds[slot.w - 1], DAY_C.rounds[Math.max(1, slot.w - 1) - 1]) : DAY_C.rounds[slot.w - 1]) + ' rounds' : DAYS[c.key].length + ' exercises'} · week ${slot.w}${slot.w === 4 ? ', deload' : ''}${c.status ? ' · ' + c.status : ''}</div><ul>`;
     if (c.key === 'C') {
       h += `<li><span style="opacity:1;font-weight:600">Warm-up</span><span style="white-space:normal;text-align:right">${esc(DAY_C.warm)}</span></li>`;
-      DAY_C.steps(slot.w).forEach(([a, b]) => { h += `<li><b style="font-weight:600">${a}</b><span>${b}</span></li>`; });
-    } else prescList(c.key, slot.w).forEach(p => { h += `<li><button data-action="exhist" data-ex="${esc(p.name)}">${esc(p.name)}${p.optional ? ' (optional)' : ''}</button><span>${p.sets}×${p.reps}${p.per}${p.load.type === 'kg' && p.load.value != null ? ' @' + p.load.value : ''}</span></li>`; });
+      DAY_C.steps(ret ? Math.max(1, slot.w - 1) : slot.w).forEach(([a, b]) => { h += `<li><b style="font-weight:600">${a}</b><span>${b}</span></li>`; });
+    } else prescList(c.key, slot.w, ret).forEach(p => { h += `<li><button data-action="exhist" data-ex="${esc(p.name)}">${esc(p.name)}${p.optional ? ' (optional)' : ''}</button><span>${p.sets}×${p.reps}${p.per}${p.load.type === 'kg' && p.load.value != null ? ' @' + p.load.value : ''}</span></li>`; });
     h += `</ul>`;
     if (c.key === 'B' && slot.w === 1) h += `<div class="meta" style="margin:-4px 0 12px">${DAY_B_CAP}</div>`;
+    h += returnBanner(slot);
     h += `<button class="btn pri" data-action="startsession" data-slot="${slot.id}">${done ? 'Review session' : s && st.sets + st.rounds ? `Continue session · ${st.sets + st.rounds} done` : 'Start session'}</button></div>`;
+    }
   } else if (c.phase === 'in') {
     const z = c.key === 'Z';
     h += `<div class="hero rest${wzCls(date)}"><div class="letter">${z ? 'Z2' : '–'}</div><h2>${c.moved ? 'Rest' : esc(info.name)}</h2><div class="meta">${c.moved ? 'Session moved to another day.' : esc(info.title)}</div>`;
@@ -37,8 +61,8 @@ screens.today = () => {
   }
   /* quick log */
   if (ci.sleepH == null || ci.doms == null) {
-    h += `<div class="sec">Quick check-in</div><div class="card pad"><div class="lbl" style="margin-top:0">Sleep last night (hours)</div><input data-in="qsleep" inputmode="decimal" placeholder="7.5" value="${ci.sleepH ?? ''}" aria-label="Sleep hours"><div class="lbl">Soreness today (0 none, 10 worst)</div><div class="chips o" style="gap:4px">${[...Array(11).keys()].map(n => `<button class="chip" style="min-width:44px;flex:1" data-action="qdoms" data-v="${n}" aria-pressed="${ci.doms === n}">${n}</button>`).join('')}</div></div>`;
-  } else h += `<div class="sec">Quick check-in</div><div class="card"><button class="row" data-action="tab" data-tab="log"><div class="grow"><div class="t">Logged for today</div><div class="s">Sleep ${fmtN(ci.sleepH)} h · soreness ${ci.doms}/10</div></div>${chev}</button></div>`;
+    h += `<div class="sec">Quick check-in</div><div class="card pad"><div class="lbl" style="margin-top:0">Sleep last night (hours)</div><input data-in="qsleep" inputmode="decimal" placeholder="7.5" value="${ci.sleepH ?? ''}" aria-label="Sleep hours"><div class="lbl">Soreness today (0 none, 10 worst)</div><div class="chips o" style="gap:4px">${[...Array(11).keys()].map(n => `<button class="chip" style="min-width:44px;flex:1" data-action="qdoms" data-v="${n}" aria-pressed="${ci.doms === n}">${n}</button>`).join('')}</div>${feelSickHTML(date)}</div>`;
+  } else h += `<div class="sec">Quick check-in</div><div class="card"><button class="row" data-action="tab" data-tab="log"><div class="grow"><div class="t">Logged for today</div><div class="s">Sleep ${fmtN(ci.sleepH)} h · soreness ${ci.doms}/10</div></div>${chev}</button></div><div class="card pad" style="margin-top:8px">${feelSickHTML(date, true)}</div>`;
   /* mobility */
   const ml = S.mobLog[date] || {}, md = MOBILITY.filter(m => ml[m.id]).length;
   h += `<div class="sec"><span>Daily mobility</span><span class="faint">${md}/${MOBILITY.length}</span></div><div class="card">${MOBILITY.map(m => `<button class="row ${ml[m.id] ? 'on' : ''}" data-action="mobtoggle" data-id="${m.id}">${checkIco}<div class="grow"><div class="t strike">${m.t}</div><div class="s">${m.d}</div></div></button>`).join('')}</div>`;
@@ -73,7 +97,7 @@ actions.mobtoggle = el => { const d = isoDate(); const m = S.mobLog[d] = S.mobLo
 actions.supptoggle = el => { const d = el.dataset.date, m = S.suppLog[d] = S.suppLog[d] || {}; if (m[el.dataset.id]) delete m[el.dataset.id]; else m[el.dataset.id] = Date.now(); saveState(); vib(6); render(); };
 
 /* ===== PLAN ===== */
-function slotStatusPill(st) { return st === 'done' ? '<span class="pill g">Done</span>' : st === 'skipped' ? '<span class="pill">Skipped</span>' : ''; }
+function slotStatusPill(st) { return st === 'done' ? '<span class="pill g">Done</span>' : st === 'skipped' ? '<span class="pill">Skipped</span>' : st === 'sick' ? '<span class="pill o">Sick</span>' : ''; }
 screens.plan = () => {
   const P = ui.plan; let h = '';
   const back = (to, label) => `<button class="xbtn" style="text-align:left;margin-left:-8px" data-action="planview" data-view="${to}">‹ ${label}</button>`;
@@ -112,6 +136,7 @@ function openDaySheet(id) {
   b += `<div style="display:grid;gap:8px;margin-top:14px">`;
   if (i.gym) b += `<button class="btn pri" data-action="startsession" data-slot="${id}">${sessionOf(s) ? 'Open session' : 'Start session'}</button>`;
   b += `<div class="two"><button class="btn ${st === 'done' ? 'grn' : ''}" data-action="slotmark" data-slot="${id}" data-st="${st === 'done' ? '' : 'done'}">${st === 'done' ? 'Done ✓' : 'Mark done'}</button><button class="btn ${st === 'skipped' ? 'grn' : ''}" data-action="slotmark" data-slot="${id}" data-st="${st === 'skipped' ? '' : 'skipped'}">${st === 'skipped' ? 'Skipped ✓' : 'Skip'}</button></div>`;
+  if (i.gym) b += `<button class="btn ${st === 'sick' ? 'grn' : 'ghost'}" data-action="slotmark" data-slot="${id}" data-st="${st === 'sick' ? '' : 'sick'}">${st === 'sick' ? 'Sick day ✓' : 'Mark as sick day'}</button>`;
   b += `<div class="lbl" style="margin-bottom:0">Move this session to another day</div><div style="display:flex;gap:8px"><input type="date" id="movedate" value="${s.date}" aria-label="New date"><button class="btn sm" data-action="slotmove" data-slot="${id}">Move</button></div>`;
   if (S.slotDate[id]) b += `<button class="btn ghost sm" data-action="slotmove" data-slot="${id}" data-reset="1" style="width:100%">Put back on ${fmtShort(slotDefault(s.w, s.d))}</button>`;
   openSheet(`${i.name}${i.gym ? ': ' + i.title : ''}`, b + '</div>');
